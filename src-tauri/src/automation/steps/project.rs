@@ -152,11 +152,42 @@ pub fn run(
 
     // Dismiss "Missing Media" DOM dialog (nếu có).
     // Dialog này là Electron DOM overlay → FindWindowW không detect được.
-    // Esc 2 lần: an toàn vì nếu không có dialog thì bị ignore,
-    // nếu có dialog → dismiss → render tiếp (có thể thiếu media nhưng vẫn ra file).
-    emit_log(app, "[step1] Dismiss potential Missing Media dialog (Esc x2)...");
+    // QUAN TRỌNG: Phải chờ CapCut thoát "Not Responding" TRƯỚC khi gửi Esc,
+    // vì project nặng có thể làm CapCut freeze 10-30s sau khi mở.
+    // Nếu gửi Esc khi frozen → bị nuốt → dialog còn → Ctrl+E bị block.
+    emit_log(app, "[step1] Chờ CapCut responsive (tối đa 30s) trước khi dismiss dialog...");
+    #[cfg(target_os = "windows")]
+    {
+        use super::super::window::win_focus;
+        let nr_start = Instant::now();
+        while win_focus::is_capcut_not_responding() {
+            if nr_start.elapsed().as_secs() >= 30 {
+                emit_log(app, "  [step1] ⚠ CapCut vẫn Not Responding sau 30s — tiếp tục");
+                break;
+            }
+            if state.should_stop.load(Ordering::SeqCst) {
+                return StepResult::StopAll;
+            }
+            thread::sleep(Duration::from_millis(1000));
+        }
+        if nr_start.elapsed().as_secs() > 0 {
+            emit_log(
+                app,
+                format!(
+                    "  [step1] CapCut responsive sau {}s",
+                    nr_start.elapsed().as_secs()
+                ),
+            );
+        }
+    }
+
+    // Esc x3: an toàn vì nếu không có dialog thì bị ignore,
+    // nếu có dialog → dismiss → render tiếp (CapCut render thiếu media thay vì stuck).
+    emit_log(app, "[step1] Dismiss potential Missing Media dialog (Esc x3)...");
     focus_capcut_log(app);
-    thread::sleep(Duration::from_millis(1000));
+    thread::sleep(Duration::from_millis(800));
+    let _ = enigo.key(Key::Escape, Direction::Click);
+    thread::sleep(Duration::from_millis(500));
     let _ = enigo.key(Key::Escape, Direction::Click);
     thread::sleep(Duration::from_millis(500));
     let _ = enigo.key(Key::Escape, Direction::Click);

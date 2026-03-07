@@ -32,6 +32,14 @@ pub fn run(
     focus_capcut_log(app);
     thread::sleep(Duration::from_millis(2000));
 
+    // Safety net: gửi Esc thêm một lần nữa phòng trường hợp Missing Media dialog
+    // xuất hiện muộn (sau khi maximize) mà step1 chưa kịp dismiss.
+    // Esc ở đây an toàn: nếu export dialog đã mở → Esc đóng nó (sẽ retry sau);
+    // nếu không có gì → bị ignore.
+    emit_log(app, "  [step3] Pre-Ctrl+E safety Esc...");
+    let _ = enigo.key(Key::Escape, Direction::Click);
+    thread::sleep(Duration::from_millis(300));
+
     // Click giữa editor canvas để set DOM focus.
     // SetForegroundWindow chỉ set OS focus, không control DOM focus bên trong Electron.
     emit_log(app, "  [step3] Click editor canvas để set DOM focus...");
