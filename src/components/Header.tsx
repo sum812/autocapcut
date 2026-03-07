@@ -1,4 +1,3 @@
-import React from "react";
 import { AutoStatus } from "../hooks/useAutomation";
 
 interface Props {

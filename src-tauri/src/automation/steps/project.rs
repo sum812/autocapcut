@@ -150,6 +150,18 @@ pub fn run(
         format!("[step1] done ({:.1}s)", step1_start.elapsed().as_secs_f64()),
     );
 
+    // Dismiss "Missing Media" DOM dialog (nếu có).
+    // Dialog này là Electron DOM overlay → FindWindowW không detect được.
+    // Esc 2 lần: an toàn vì nếu không có dialog thì bị ignore,
+    // nếu có dialog → dismiss → render tiếp (có thể thiếu media nhưng vẫn ra file).
+    emit_log(app, "[step1] Dismiss potential Missing Media dialog (Esc x2)...");
+    focus_capcut_log(app);
+    thread::sleep(Duration::from_millis(1000));
+    let _ = enigo.key(Key::Escape, Direction::Click);
+    thread::sleep(Duration::from_millis(500));
+    let _ = enigo.key(Key::Escape, Direction::Click);
+    thread::sleep(Duration::from_millis(500));
+
     // Step 2: Maximize Editor
     close_popups_editor(app);
     emit_log(app, "[step2] Maximize CapCut editor...");

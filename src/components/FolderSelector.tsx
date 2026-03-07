@@ -1,4 +1,3 @@
-import React from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { AppConfig } from "../utils/SettingsContext";
 

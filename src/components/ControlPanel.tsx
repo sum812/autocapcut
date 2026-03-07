@@ -1,4 +1,3 @@
-import React from "react";
 import { AppConfig } from "../utils/SettingsContext";
 
 interface Props {

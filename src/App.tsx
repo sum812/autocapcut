@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -82,7 +82,7 @@ function AppInner() {
 
   const selectedNames = projects.filter((p) => p.selected).map((p) => p.name);
 
-  const { autoStatus, start, stop } = useAutomation(config, selectedNames, () => {});
+  const { autoStatus, start, stop } = useAutomation(config, selectedNames);
 
   const isRunning = autoStatus === "running" || autoStatus === "stopping";
 

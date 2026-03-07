@@ -5,15 +5,9 @@ import { AppConfig } from "../utils/SettingsContext";
 
 export type AutoStatus = "idle" | "running" | "stopping" | "stopped";
 
-export interface ProjectStatus {
-  name: string;
-  status: "Pending" | "Running" | "Done" | "Error";
-}
-
 export function useAutomation(
   config: AppConfig,
   projectNames: string[],
-  onStatusChange: (names: string[]) => void
 ) {
   const [autoStatus, setAutoStatus] = useState<AutoStatus>("idle");
 

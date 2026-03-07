@@ -1,6 +1,3 @@
-import React from "react";
-import { listen } from "@tauri-apps/api/event";
-
 export interface Project {
   id: string;
   name: string;
