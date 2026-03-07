@@ -27,10 +27,17 @@ export function useCoordPicker(
     let unlistenPick: (() => void) | undefined;
     let unlistenCancel: (() => void) | undefined;
 
-    listen<Coords>("coordinate-picked", (event) => {
+    listen<Coords>("coordinate-picked", async (event) => {
       if (picking) {
+        const [x, y] = event.payload;
         onPick(picking, event.payload);
         setPicking(null);
+        // Chụp template 48×48 xung quanh tọa độ vừa chọn để dùng cho auto-detect sau
+        try {
+          await invoke("capture_ui_template", { coordKey: picking, x, y });
+        } catch {
+          // Lỗi template capture không chặn workflow thủ công
+        }
       }
     }).then((u) => (unlistenPick = u));
 

@@ -34,5 +34,8 @@ once_cell = "1"
 log       = "0.4"
 env_logger = "0.11"
 
+# Image I/O (cho detect module: lưu/đọc template PNG)
+image = { version = "0.25", default-features = false, features = ["png"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 # Windows API — dùng raw FFI trong window.rs, không cần thêm crate
