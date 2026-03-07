@@ -30,9 +30,11 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
         return;
     }
 
+    let max_retries = config.max_retries;
     emit_log(app, format!("🚀 Bắt đầu Auto Render {} project...", total));
     emit_log(app, format!("📁 Export folder: {}", config.export_path));
     emit_log(app, format!("⏱ Timeout: {} phút/project", config.render_timeout_minutes));
+    emit_log(app, format!("🔄 Max retries: {}/project", max_retries));
 
     // Pre-check export path
     if let Err(e) = validate_export_path(&config.export_path) {
@@ -50,14 +52,13 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
 
     // Step 0: Kill → Launch → Wait → Maximize Home
     match steps::setup::run(app, &config, &state, &mut enigo) {
-        StepResult::StopAll => return,
-        StepResult::SkipProject => return,
+        StepResult::StopAll | StepResult::SkipProject => return,
         StepResult::Continue => {}
     }
 
-    // Loop qua từng project
+    // ─── Loop qua từng project ────────────────────────────────────────────────
     let mut success_count = 0u32;
-    for (idx, project_name) in config.project_names.iter().enumerate() {
+    'projects: for (idx, project_name) in config.project_names.iter().enumerate() {
         if state.should_stop.load(Ordering::SeqCst) {
             emit_log(app, "⏹ Đã dừng bởi người dùng");
             break;
@@ -66,68 +67,118 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
         emit_log(app, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         emit_log(app, format!("[{}/{}] Project: {}", idx + 1, total, project_name));
         emit_project_status(app, project_name, "Running");
+
         let project_start = Instant::now();
+        let mut render_done = false;
+        let mut render_elapsed = 0u64;
 
-        // Snapshot export folder trước khi render
-        let before_files = get_files_in_dir(&config.export_path);
-        let video_count = before_files
-            .iter()
-            .filter(|f| {
-                let lower = f.to_lowercase();
-                matches!(
-                    lower.rsplit('.').next(),
-                    Some("mp4" | "mov" | "avi" | "mkv" | "webm")
-                )
-            })
-            .count();
-        emit_log(
-            app,
-            format!(
-                "  [snap] Export folder: {} files ({} video)",
-                before_files.len(),
-                video_count
-            ),
-        );
-
-        // Steps 1-2: Open project + Maximize Editor
-        match steps::project::run(app, &config, &state, &mut enigo, idx, project_name) {
-            StepResult::StopAll => {
+        // ─── Retry loop ───────────────────────────────────────────────────────
+        for attempt in 1..=(max_retries + 1) {
+            if state.should_stop.load(Ordering::SeqCst) {
                 restore_tool_window(app);
-                return;
+                break 'projects;
             }
-            StepResult::SkipProject => {
-                emit_project_status(app, project_name, "Error");
-                continue;
-            }
-            StepResult::Continue => {}
-        }
 
-        // Steps 3-5: Ctrl+E → Set path → Enter
-        match steps::export::run(app, &config, &state, &mut enigo, idx) {
-            StepResult::StopAll => {
+            if attempt > 1 {
+                steps::recovery::emit_retry_status(
+                    app,
+                    project_name,
+                    attempt - 1,
+                    max_retries,
+                );
+                if !steps::recovery::recover_capcut(app, &config, &state, &mut enigo) {
+                    emit_log(app, "❌ Recovery thất bại — dừng automation");
+                    restore_tool_window(app);
+                    break 'projects;
+                }
+                if state.should_stop.load(Ordering::SeqCst) {
+                    restore_tool_window(app);
+                    break 'projects;
+                }
+            }
+
+            // Snapshot export folder trước khi render
+            let before_files = get_files_in_dir(&config.export_path);
+
+            // Steps 1-2: Open project + Maximize Editor
+            match steps::project::run(app, &config, &state, &mut enigo, idx, project_name) {
+                StepResult::StopAll => {
+                    restore_tool_window(app);
+                    break 'projects;
+                }
+                StepResult::SkipProject => {
+                    if attempt <= max_retries {
+                        emit_log(
+                            app,
+                            format!(
+                                "  ⚠ Open project thất bại (attempt {}/{}), sẽ retry...",
+                                attempt,
+                                max_retries + 1
+                            ),
+                        );
+                        continue; // retry
+                    }
+                    break; // đã hết retry
+                }
+                StepResult::Continue => {}
+            }
+
+            // Steps 3-5: Ctrl+E → Set path → Enter
+            match steps::export::run(app, &config, &state, &mut enigo, idx) {
+                StepResult::StopAll => {
+                    restore_tool_window(app);
+                    break 'projects;
+                }
+                StepResult::SkipProject => {
+                    if attempt <= max_retries {
+                        emit_log(
+                            app,
+                            format!(
+                                "  ⚠ Export dialog thất bại (attempt {}/{}), sẽ retry...",
+                                attempt,
+                                max_retries + 1
+                            ),
+                        );
+                        continue;
+                    }
+                    break;
+                }
+                StepResult::Continue => {}
+            }
+
+            if state.should_stop.load(Ordering::SeqCst) {
                 restore_tool_window(app);
-                return;
+                break 'projects;
             }
-            StepResult::SkipProject => {
-                emit_project_status(app, project_name, "Error");
-                continue;
+
+            // Step 6: Poll render done
+            let (done, elapsed) = steps::render::run(app, &config, &state, &before_files);
+            render_done = done;
+            render_elapsed = elapsed;
+
+            if state.should_stop.load(Ordering::SeqCst) {
+                restore_tool_window(app);
+                break 'projects;
             }
-            StepResult::Continue => {}
-        }
 
-        if state.should_stop.load(Ordering::SeqCst) {
-            restore_tool_window(app);
-            return;
-        }
+            if render_done {
+                break; // thành công → thoát retry loop
+            }
 
-        // Step 6: Poll render done
-        let (render_done, render_elapsed) =
-            steps::render::run(app, &config, &state, &before_files);
-
-        if state.should_stop.load(Ordering::SeqCst) {
-            restore_tool_window(app);
-            return;
+            // Render timeout
+            if attempt <= max_retries {
+                emit_log(
+                    app,
+                    format!(
+                        "  ⚠ Render timeout sau {}s (attempt {}/{}), sẽ retry...",
+                        render_elapsed,
+                        attempt,
+                        max_retries + 1
+                    ),
+                );
+            }
         }
+        // ─── End retry loop ───────────────────────────────────────────────────
 
         if render_done {
             emit_log(
@@ -143,22 +194,14 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
             emit_log(
                 app,
                 format!(
-                    "⚠️ [{}/{}] Timeout sau {}s: {}",
-                    idx + 1, total, render_elapsed, project_name
+                    "⚠️ [{}/{}] Thất bại sau {} lần thử: {}",
+                    idx + 1,
+                    total,
+                    max_retries + 1,
+                    project_name
                 ),
             );
             emit_project_status(app, project_name, "Error");
-        }
-
-        // Step 7: Đóng project → về Home (bỏ qua project cuối cùng)
-        if idx + 1 < total {
-            match steps::cleanup::run(app, &config, &state, &mut enigo) {
-                StepResult::StopAll => {
-                    restore_tool_window(app);
-                    return;
-                }
-                _ => {}
-            }
         }
 
         let project_elapsed = project_start.elapsed().as_secs();
@@ -172,6 +215,17 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
                 render_elapsed
             ),
         );
+
+        // Step 7: Đóng project → về Home (bỏ qua project cuối cùng)
+        if idx + 1 < total {
+            match steps::cleanup::run(app, &config, &state, &mut enigo) {
+                StepResult::StopAll => {
+                    restore_tool_window(app);
+                    return;
+                }
+                _ => {}
+            }
+        }
     }
 
     restore_tool_window(app);

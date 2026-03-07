@@ -1,6 +1,7 @@
 pub mod cleanup;
 pub mod export;
 pub mod project;
+pub mod recovery;
 pub mod render;
 pub mod setup;
 

@@ -37,6 +37,7 @@ export function useAutomation(
           render_delay: config.render_delay,
           render_timeout_minutes: config.render_timeout,
           shutdown: config.shutdown,
+          max_retries: config.max_retries,
         },
       });
     } catch (e) {

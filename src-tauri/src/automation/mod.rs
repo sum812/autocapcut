@@ -57,7 +57,11 @@ pub struct AutoConfig {
     pub render_delay: u64,           // giây
     pub render_timeout_minutes: u64, // phút
     pub shutdown: bool,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,            // số lần retry mỗi project (0 = không retry)
 }
+
+fn default_max_retries() -> u32 { 2 }
 
 // ─── Global keyboard listener (coordinate picking) ───────────────────────────
 
