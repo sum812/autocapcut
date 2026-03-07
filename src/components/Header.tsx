@@ -1,7 +1,11 @@
 import { AutoStatus } from "../hooks/useAutomation";
+import LicenseBadge from "./LicenseBadge";
+import type { LicenseStatus } from "../hooks/useLicense";
 
 interface Props {
   autoStatus: AutoStatus;
+  licenseStatus: LicenseStatus;
+  onLicenseClick: () => void;
 }
 
 const STATUS_LABELS: Record<AutoStatus, string> = {
@@ -18,7 +22,7 @@ const STATUS_COLORS: Record<AutoStatus, string> = {
   stopped: "bg-[rgba(239,68,68,0.12)] text-[var(--danger)]",
 };
 
-export default function Header({ autoStatus }: Props) {
+export default function Header({ autoStatus, licenseStatus, onLicenseClick }: Props) {
   return (
     <header
       className="flex items-center justify-between px-5 py-3 border-b"
@@ -32,6 +36,7 @@ export default function Header({ autoStatus }: Props) {
       </div>
 
       <div className="flex items-center gap-3">
+        <LicenseBadge status={licenseStatus} onClick={onLicenseClick} />
         <span className={`badge text-xs ${STATUS_COLORS[autoStatus]}`}>
           {STATUS_LABELS[autoStatus]}
         </span>

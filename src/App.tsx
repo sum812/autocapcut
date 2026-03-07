@@ -17,6 +17,8 @@ import ProgressBar from "./components/ProgressBar";
 import UpdateBanner from "./components/UpdateBanner";
 import { useProgress } from "./hooks/useProgress";
 import { useUpdater } from "./hooks/useUpdater";
+import { useLicense } from "./hooks/useLicense";
+import LicenseDialog from "./components/LicenseDialog";
 
 function AppInner() {
   const { config, setConfig, saveConfig, loadConfig } = useSettings();
@@ -93,6 +95,8 @@ function AppInner() {
 
   const { progress, percent } = useProgress(isRunning);
   const { state: updateState, downloadAndInstall, dismiss: dismissUpdate } = useUpdater();
+  const { licenseStatus, loading: licenseLoading, error: licenseError, activate, deactivate, refresh, clearError } = useLicense();
+  const [showLicenseDialog, setShowLicenseDialog] = useState(false);
 
   const { picking, startPick } = useCoordPicker(
     (key, coords) => handleConfigChange({ [key]: coords })
@@ -116,7 +120,18 @@ function AppInner() {
       />
     )}
     <div className="flex flex-col h-screen" style={{ background: "var(--bg-base)" }}>
-      <Header autoStatus={autoStatus} />
+      <Header autoStatus={autoStatus} licenseStatus={licenseStatus} onLicenseClick={() => setShowLicenseDialog(true)} />
+      {showLicenseDialog && (
+        <LicenseDialog
+          status={licenseStatus}
+          loading={licenseLoading}
+          error={licenseError}
+          onActivate={async (key) => { const ok = await activate(key); return ok; }}
+          onDeactivate={async () => { await deactivate(); setShowLicenseDialog(false); }}
+          onRefresh={refresh}
+          onClose={() => { setShowLicenseDialog(false); clearError(); }}
+        />
+      )}
       <UpdateBanner
         state={updateState}
         onInstall={downloadAndInstall}

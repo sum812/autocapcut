@@ -39,3 +39,15 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Windows API — dùng raw FFI trong window.rs, không cần thêm crate
+
+# License System
+jsonwebtoken = "9"
+sha2 = "0.10"
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["hmac"] }
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json"], default-features = false }
+
+[target.'cfg(target_os = "windows")'.dependencies.winreg]
+version = "0.52"
