@@ -297,6 +297,18 @@ pub mod win_focus {
         None
     }
 
+    /// Trả về HWND của cửa sổ CapCut chính dưới dạng isize.
+    pub fn get_capcut_hwnd() -> Option<isize> {
+        unsafe {
+            let mut data = EnumData { hwnd: ptr::null_mut(), title: String::new(), area: 0 };
+            EnumWindows(enum_callback, &mut data as *mut _ as isize);
+            if !data.hwnd.is_null() {
+                return Some(data.hwnd as isize);
+            }
+        }
+        None
+    }
+
     /// Lấy kích thước màn hình chính.
     pub fn get_screen_size() -> Option<(i32, i32)> {
         unsafe {
@@ -494,6 +506,34 @@ pub mod win_focus {
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
+    }
+}
+
+// ─── Window HWND / Rect helpers (dùng bởi detect module) ─────────────────────
+
+/// Trả về HWND của cửa sổ CapCut chính (lớn nhất) dưới dạng isize.
+pub fn get_capcut_main_hwnd() -> Option<isize> {
+    #[cfg(target_os = "windows")]
+    {
+        // Dùng get_capcut_rect logic nhưng trả về hwnd thay vì rect
+        use win_focus::*;
+        return get_capcut_hwnd();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
+    }
+}
+
+/// Trả về (left, top, right, bottom) của cửa sổ CapCut chính.
+pub fn get_capcut_window_rect() -> Option<(i32, i32, i32, i32)> {
+    #[cfg(target_os = "windows")]
+    {
+        return win_focus::get_capcut_rect();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
     }
 }
 

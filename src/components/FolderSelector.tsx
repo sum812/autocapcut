@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { AppConfig } from "../utils/SettingsContext";
+import { useAutoDetect } from "../hooks/useAutoDetect";
 
 interface Props {
   config: AppConfig;
@@ -16,6 +17,8 @@ export default function FolderSelector({
   picking,
   onStartPick,
 }: Props) {
+  const { detectState, detect } = useAutoDetect(onChange);
+
   const pickFolder = async (field: "project_folder" | "export_folder") => {
     const selected = await open({ directory: true, multiple: false });
     if (typeof selected === "string" && selected) {
@@ -36,30 +39,57 @@ export default function FolderSelector({
     value: [number, number];
     pickKey: "first_project_coords" | "export_box_coords" | "search_button_coords";
     tip: string;
-  }) => (
-    <div className="flex items-center gap-2 py-1.5">
-      <span
-        className="w-40 shrink-0 text-xs"
-        style={{ color: "var(--text-sec)" }}
-      >
-        {label}
-      </span>
-      <span
-        className="flex-1 font-mono text-xs"
-        style={{ color: value[0] === 0 ? "var(--text-dim)" : "var(--text-pri)" }}
-      >
-        {fmtCoord(value)}
-      </span>
-      <button
-        className="btn btn-ghost text-xs py-1 px-2"
-        disabled={picking !== null}
-        onClick={() => onStartPick(pickKey)}
-        title={tip}
-      >
-        {picking === pickKey ? "⏳ Chờ..." : "Calibrate"}
-      </button>
-    </div>
-  );
+  }) => {
+    const isDetecting = detectState.status === "detecting" && detectState.key === pickKey;
+    const isDone = detectState.status === "done" && detectState.key === pickKey;
+    const isError = detectState.status === "error" && detectState.key === pickKey;
+    const hasTemplate = value[0] !== 0 || value[1] !== 0;
+    const busy = picking !== null || detectState.status === "detecting";
+
+    return (
+      <div className="flex flex-col gap-0.5 py-1.5">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-40 shrink-0 text-xs"
+            style={{ color: "var(--text-sec)" }}
+          >
+            {label}
+          </span>
+          <span
+            className="flex-1 font-mono text-xs"
+            style={{ color: value[0] === 0 ? "var(--text-dim)" : "var(--text-pri)" }}
+          >
+            {fmtCoord(value)}
+          </span>
+          <button
+            className="btn btn-ghost text-xs py-1 px-2"
+            disabled={busy}
+            onClick={() => onStartPick(pickKey)}
+            title={tip}
+          >
+            {picking === pickKey ? "⏳ Chờ..." : "Calibrate"}
+          </button>
+          <button
+            className="btn btn-ghost text-xs py-1 px-2"
+            disabled={busy || !hasTemplate}
+            onClick={() => detect(pickKey)}
+            title={
+              hasTemplate
+                ? "Tự động phát hiện vị trí dựa trên template đã lưu"
+                : "Chưa có template — hãy Calibrate thủ công trước"
+            }
+          >
+            {isDetecting ? "🔍 Đang tìm..." : isDone ? "✅ Xong" : "🔍 Auto"}
+          </button>
+        </div>
+        {isError && (
+          <span className="text-xs ml-40 pl-2" style={{ color: "var(--color-error, #f87171)" }}>
+            {detectState.error}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -111,7 +141,7 @@ export default function FolderSelector({
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
       >
         <div className="text-xs font-semibold mb-1" style={{ color: "var(--text-sec)" }}>
-          Hiệu chỉnh tọa độ (Space hoặc Enter để xác nhận, Esc để hủy)
+          Hiệu chỉnh tọa độ — Calibrate thủ công lần đầu, sau đó dùng 🔍 Auto để tự phát hiện
         </div>
         <CoordRow
           label="Project đầu tiên"

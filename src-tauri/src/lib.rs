@@ -1,5 +1,6 @@
 mod automation;
 mod config;
+mod detect;
 mod updater;
 
 use automation::AutomationState;
@@ -34,6 +35,9 @@ pub fn run() {
             automation::logger::get_log_file_path,
             // Updater
             updater::check_update,
+            // Auto-detect UI coords
+            detect::capture_ui_template,
+            detect::detect_ui_coords,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoCapcut");
