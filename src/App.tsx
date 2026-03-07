@@ -12,6 +12,8 @@ import FolderSelector from "./components/FolderSelector";
 import ProjectTable, { Project } from "./components/ProjectTable";
 import ControlPanel from "./components/ControlPanel";
 import Terminal from "./components/Terminal";
+import UpdateBanner from "./components/UpdateBanner";
+import { useUpdater } from "./hooks/useUpdater";
 
 function AppInner() {
   const { config, setConfig, saveConfig, loadConfig } = useSettings();
@@ -90,6 +92,8 @@ function AppInner() {
     (key, coords) => handleConfigChange({ [key]: coords })
   );
 
+  const { state: updateState, downloadAndInstall, dismiss: dismissUpdate } = useUpdater();
+
   const handleSave = async () => {
     await saveConfig();
   };
@@ -97,6 +101,11 @@ function AppInner() {
   return (
     <div className="flex flex-col h-screen" style={{ background: "var(--bg-base)" }}>
       <Header autoStatus={autoStatus} />
+      <UpdateBanner
+        state={updateState}
+        onInstall={downloadAndInstall}
+        onDismiss={dismissUpdate}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel */}
