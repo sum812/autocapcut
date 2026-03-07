@@ -8,7 +8,6 @@ use super::helpers::{
 };
 use super::logger::{emit_log, init_log_file};
 use super::steps::{self, StepResult};
-use super::window::log_diagnostic;
 use super::{AutoConfig, AutomationState};
 
 /// Entry point của automation loop, chạy trong thread riêng.

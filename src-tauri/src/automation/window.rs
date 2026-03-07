@@ -691,6 +691,7 @@ pub fn wait_for_capcut_window(app: &AppHandle, timeout_secs: u64, state: &Automa
 }
 
 /// Đóng cửa sổ CapCut: focus → Alt+F4.
+#[allow(dead_code)]
 pub fn close_capcut(app: &AppHandle, enigo: &mut Enigo) {
     emit_log(app, "  [close] Focus CapCut trước Alt+F4...");
     focus_capcut_log(app);

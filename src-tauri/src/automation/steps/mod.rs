@@ -11,7 +11,6 @@ use tauri::AppHandle;
 
 use super::logger::emit_log;
 use super::window::focus_capcut_log;
-use super::AutomationState;
 
 /// Kết quả trả về của từng step.
 pub enum StepResult {

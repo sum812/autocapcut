@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -38,7 +41,9 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: Build Tauri app
+      # Push tag v* → tạo GitHub Release
+      - name: Build & Release (tag)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,12 +55,21 @@ jobs:
           prerelease: false
           args: --target x86_64-pc-windows-msvc
 
-      - name: Upload installer (manual trigger)
-        if: github.event_name == 'workflow_dispatch'
+      # Push main hoặc manual → chỉ build + upload artifact
+      - name: Build only (branch / manual)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --target x86_64-pc-windows-msvc
+
+      - name: Upload artifact
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         uses: actions/upload-artifact@v4
         with:
-          name: autocapcut-windows
+          name: autocapcut-windows-${{ github.sha }}
           path: |
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-          retention-days: 7
+          retention-days: 14

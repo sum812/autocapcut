@@ -2,7 +2,7 @@
 use enigo::Enigo;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use super::super::helpers::{restore_tool_window, sleep_interruptible};
 use super::super::logger::emit_log;

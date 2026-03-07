@@ -15,7 +15,7 @@ pub fn run(
     config: &AutoConfig,
     state: &AutomationState,
     enigo: &mut Enigo,
-    idx: usize,
+    _idx: usize,
     project_name: &str,
 ) -> StepResult {
     let step1_start = Instant::now();
