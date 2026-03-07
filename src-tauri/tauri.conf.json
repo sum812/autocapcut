@@ -37,8 +37,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["Vietnamese", "English"],
-        "shortcutsEnabled": true
+        "languages": ["Vietnamese", "English"]
       }
     }
   },
