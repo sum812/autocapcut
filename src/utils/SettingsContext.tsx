@@ -17,6 +17,7 @@ export interface AppConfig {
   render_timeout: number;
   shutdown: boolean;
   max_retries: number;
+  wizard_completed: boolean;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -29,6 +30,7 @@ const DEFAULT_CONFIG: AppConfig = {
   render_timeout: 30,
   shutdown: false,
   max_retries: 2,
+  wizard_completed: false,
 };
 
 interface SettingsCtx {

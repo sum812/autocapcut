@@ -24,6 +24,10 @@ pub struct AppConfig {
     pub shutdown: bool,          // Tắt máy sau khi render xong
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,        // Số lần retry mỗi project khi thất bại (default: 2)
+
+    // Onboarding
+    #[serde(default)]
+    pub wizard_completed: bool,  // true sau khi hoàn thành Setup Wizard lần đầu
 }
 
 fn default_max_retries() -> u32 { 2 }

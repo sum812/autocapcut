@@ -8,6 +8,7 @@ import { useAutomation } from "./hooks/useAutomation";
 import { useCoordPicker } from "./hooks/useCoordPicker";
 
 import Header from "./components/Header";
+import SetupWizard from "./components/SetupWizard";
 import FolderSelector from "./components/FolderSelector";
 import ProjectTable, { Project } from "./components/ProjectTable";
 import ControlPanel from "./components/ControlPanel";
@@ -101,7 +102,19 @@ function AppInner() {
     await saveConfig();
   };
 
+  const handleWizardComplete = () => {
+    // wizard_completed đã được set trong SetupWizard → re-render sẽ ẩn wizard
+  };
+
   return (
+    <>
+    {!config.wizard_completed && (
+      <SetupWizard
+        config={config}
+        onChange={handleConfigChange}
+        onComplete={handleWizardComplete}
+      />
+    )}
     <div className="flex flex-col h-screen" style={{ background: "var(--bg-base)" }}>
       <Header autoStatus={autoStatus} />
       <UpdateBanner
@@ -204,6 +217,7 @@ function AppInner() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
