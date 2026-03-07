@@ -1,0 +1,28 @@
+# Node
+node_modules/
+dist/
+.pnpm-store/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Tauri build artifacts
+*.app
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
