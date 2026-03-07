@@ -7,6 +7,24 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use super::AutomationState;
 
+// ─── Progress tracking ────────────────────────────────────────────────────────
+
+#[derive(Clone, serde::Serialize)]
+pub struct ProgressPayload {
+    pub done: u32,              // projects đã xử lý (success + fail)
+    pub total: u32,             // tổng số projects
+    pub success: u32,           // render thành công
+    pub failed: u32,            // thất bại / skip
+    pub current: String,        // project đang xử lý ("" nếu xong)
+    pub elapsed_secs: u64,      // tổng thời gian từ khi bắt đầu
+    pub eta_secs: Option<u64>,  // dự kiến còn lại (None = chưa đủ data)
+}
+
+/// Emit event `"progress"` để frontend cập nhật progress bar + ETA.
+pub fn emit_progress(app: &AppHandle, payload: ProgressPayload) {
+    let _ = app.emit("progress", payload);
+}
+
 /// Restore cửa sổ tool: unminimize và focus lại.
 pub fn restore_tool_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {

@@ -12,7 +12,9 @@ import FolderSelector from "./components/FolderSelector";
 import ProjectTable, { Project } from "./components/ProjectTable";
 import ControlPanel from "./components/ControlPanel";
 import Terminal from "./components/Terminal";
+import ProgressBar from "./components/ProgressBar";
 import UpdateBanner from "./components/UpdateBanner";
+import { useProgress } from "./hooks/useProgress";
 import { useUpdater } from "./hooks/useUpdater";
 
 function AppInner() {
@@ -88,11 +90,12 @@ function AppInner() {
 
   const isRunning = autoStatus === "running" || autoStatus === "stopping";
 
+  const { progress, percent } = useProgress(isRunning);
+  const { state: updateState, downloadAndInstall, dismiss: dismissUpdate } = useUpdater();
+
   const { picking, startPick } = useCoordPicker(
     (key, coords) => handleConfigChange({ [key]: coords })
   );
-
-  const { state: updateState, downloadAndInstall, dismiss: dismissUpdate } = useUpdater();
 
   const handleSave = async () => {
     await saveConfig();
@@ -106,6 +109,7 @@ function AppInner() {
         onInstall={downloadAndInstall}
         onDismiss={dismissUpdate}
       />
+      <ProgressBar progress={progress} percent={percent} isRunning={isRunning} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel */}

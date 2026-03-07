@@ -4,11 +4,22 @@ use std::time::Instant;
 use tauri::{AppHandle, Manager};
 
 use super::helpers::{
-    emit_project_status, get_files_in_dir, restore_tool_window, validate_export_path,
+    emit_progress, emit_project_status, get_files_in_dir, restore_tool_window,
+    validate_export_path, ProgressPayload,
 };
 use super::logger::{emit_log, init_log_file};
 use super::steps::{self, StepResult};
 use super::{AutoConfig, AutomationState};
+
+/// Tính ETA dựa trên thời gian trung bình mỗi project đã hoàn thành.
+fn compute_eta(elapsed_secs: u64, done: u32, total: u32) -> Option<u64> {
+    if done == 0 {
+        return None;
+    }
+    let avg = elapsed_secs / done as u64;
+    let remaining = (total - done) as u64;
+    Some(avg * remaining)
+}
 
 /// Entry point của automation loop, chạy trong thread riêng.
 pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
@@ -24,7 +35,7 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
         }
     };
 
-    let total = config.project_names.len();
+    let total = config.project_names.len() as u32;
     if total == 0 {
         emit_log(app, "⚠️ Không có project nào được chọn!");
         return;
@@ -57,18 +68,35 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
     }
 
     // ─── Loop qua từng project ────────────────────────────────────────────────
+    let loop_start = Instant::now();
     let mut success_count = 0u32;
+    let mut failed_count = 0u32;
+
     'projects: for (idx, project_name) in config.project_names.iter().enumerate() {
         if state.should_stop.load(Ordering::SeqCst) {
             emit_log(app, "⏹ Đã dừng bởi người dùng");
             break;
         }
 
+        let done_so_far = idx as u32;
+        let elapsed = loop_start.elapsed().as_secs();
+
+        // Emit progress: project bắt đầu
+        emit_progress(app, ProgressPayload {
+            done: done_so_far,
+            total,
+            success: success_count,
+            failed: failed_count,
+            current: project_name.clone(),
+            elapsed_secs: elapsed,
+            eta_secs: compute_eta(elapsed, done_so_far, total),
+        });
+
         emit_log(app, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         emit_log(app, format!("[{}/{}] Project: {}", idx + 1, total, project_name));
         emit_project_status(app, project_name, "Running");
-
         let project_start = Instant::now();
+
         let mut render_done = false;
         let mut render_elapsed = 0u64;
 
@@ -80,12 +108,7 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
             }
 
             if attempt > 1 {
-                steps::recovery::emit_retry_status(
-                    app,
-                    project_name,
-                    attempt - 1,
-                    max_retries,
-                );
+                steps::recovery::emit_retry_status(app, project_name, attempt - 1, max_retries);
                 if !steps::recovery::recover_capcut(app, &config, &state, &mut enigo) {
                     emit_log(app, "❌ Recovery thất bại — dừng automation");
                     restore_tool_window(app);
@@ -97,7 +120,7 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
                 }
             }
 
-            // Snapshot export folder trước khi render
+            // Snapshot export folder
             let before_files = get_files_in_dir(&config.export_path);
 
             // Steps 1-2: Open project + Maximize Editor
@@ -108,17 +131,10 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
                 }
                 StepResult::SkipProject => {
                     if attempt <= max_retries {
-                        emit_log(
-                            app,
-                            format!(
-                                "  ⚠ Open project thất bại (attempt {}/{}), sẽ retry...",
-                                attempt,
-                                max_retries + 1
-                            ),
-                        );
-                        continue; // retry
+                        emit_log(app, format!("  ⚠ Open project thất bại (attempt {}/{}), sẽ retry...", attempt, max_retries + 1));
+                        continue;
                     }
-                    break; // đã hết retry
+                    break;
                 }
                 StepResult::Continue => {}
             }
@@ -131,14 +147,7 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
                 }
                 StepResult::SkipProject => {
                     if attempt <= max_retries {
-                        emit_log(
-                            app,
-                            format!(
-                                "  ⚠ Export dialog thất bại (attempt {}/{}), sẽ retry...",
-                                attempt,
-                                max_retries + 1
-                            ),
-                        );
+                        emit_log(app, format!("  ⚠ Export dialog thất bại (attempt {}/{}), sẽ retry...", attempt, max_retries + 1));
                         continue;
                     }
                     break;
@@ -152,9 +161,9 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
             }
 
             // Step 6: Poll render done
-            let (done, elapsed) = steps::render::run(app, &config, &state, &before_files);
+            let (done, elapsed_render) = steps::render::run(app, &config, &state, &before_files);
             render_done = done;
-            render_elapsed = elapsed;
+            render_elapsed = elapsed_render;
 
             if state.should_stop.load(Ordering::SeqCst) {
                 restore_tool_window(app);
@@ -165,59 +174,41 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
                 break; // thành công → thoát retry loop
             }
 
-            // Render timeout
             if attempt <= max_retries {
-                emit_log(
-                    app,
-                    format!(
-                        "  ⚠ Render timeout sau {}s (attempt {}/{}), sẽ retry...",
-                        render_elapsed,
-                        attempt,
-                        max_retries + 1
-                    ),
-                );
+                emit_log(app, format!("  ⚠ Render timeout sau {}s (attempt {}/{}), sẽ retry...", render_elapsed, attempt, max_retries + 1));
             }
         }
         // ─── End retry loop ───────────────────────────────────────────────────
 
+        let project_elapsed = project_start.elapsed().as_secs();
+
         if render_done {
-            emit_log(
-                app,
-                format!(
-                    "✅ [{}/{}] Render xong: {} ({}s)",
-                    idx + 1, total, project_name, render_elapsed
-                ),
-            );
+            emit_log(app, format!("✅ [{}/{}] Render xong: {} ({}s)", idx + 1, total, project_name, render_elapsed));
             emit_project_status(app, project_name, "Done");
             success_count += 1;
         } else {
-            emit_log(
-                app,
-                format!(
-                    "⚠️ [{}/{}] Thất bại sau {} lần thử: {}",
-                    idx + 1,
-                    total,
-                    max_retries + 1,
-                    project_name
-                ),
-            );
+            emit_log(app, format!("⚠️ [{}/{}] Thất bại sau {} lần thử: {}", idx + 1, total, max_retries + 1, project_name));
             emit_project_status(app, project_name, "Error");
+            failed_count += 1;
         }
 
-        let project_elapsed = project_start.elapsed().as_secs();
-        emit_log(
-            app,
-            format!(
-                "[summary] '{}': {} trong {}s (render={}s)",
-                project_name,
-                if render_done { "DONE" } else { "FAIL" },
-                project_elapsed,
-                render_elapsed
-            ),
-        );
+        emit_log(app, format!("[summary] '{}': {} trong {}s (render={}s)", project_name, if render_done { "DONE" } else { "FAIL" }, project_elapsed, render_elapsed));
+
+        // Emit progress: project hoàn thành
+        let done_now = (idx + 1) as u32;
+        let elapsed_now = loop_start.elapsed().as_secs();
+        emit_progress(app, ProgressPayload {
+            done: done_now,
+            total,
+            success: success_count,
+            failed: failed_count,
+            current: String::new(),
+            elapsed_secs: elapsed_now,
+            eta_secs: compute_eta(elapsed_now, done_now, total),
+        });
 
         // Step 7: Đóng project → về Home (bỏ qua project cuối cùng)
-        if idx + 1 < total {
+        if idx + 1 < total as usize {
             match steps::cleanup::run(app, &config, &state, &mut enigo) {
                 StepResult::StopAll => {
                     restore_tool_window(app);
@@ -227,6 +218,19 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
             }
         }
     }
+
+    let total_elapsed = loop_start.elapsed().as_secs();
+
+    // Emit progress: hoàn thành toàn bộ
+    emit_progress(app, ProgressPayload {
+        done: total,
+        total,
+        success: success_count,
+        failed: failed_count,
+        current: String::new(),
+        elapsed_secs: total_elapsed,
+        eta_secs: Some(0),
+    });
 
     restore_tool_window(app);
     emit_log(app, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
