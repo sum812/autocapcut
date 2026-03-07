@@ -43,6 +43,21 @@ export default function ControlPanel({ config, onChange, onSave }: Props) {
             onChange={(e) => onChange({ render_timeout: Number(e.target.value) })}
           />
         </div>
+
+        {/* Max retries */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs" style={{ color: "var(--text-sec)" }}>
+            Retry khi lỗi (lần)
+          </label>
+          <input
+            type="number"
+            className="input text-xs"
+            min={0}
+            max={5}
+            value={config.max_retries}
+            onChange={(e) => onChange({ max_retries: Number(e.target.value) })}
+          />
+        </div>
       </div>
 
       {/* Shutdown option */}

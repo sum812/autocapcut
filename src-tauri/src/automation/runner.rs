@@ -45,6 +45,7 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
     emit_log(app, format!("🚀 Bắt đầu Auto Render {} project...", total));
     emit_log(app, format!("📁 Export folder: {}", config.export_path));
     emit_log(app, format!("⏱ Timeout: {} phút/project", config.render_timeout_minutes));
+    emit_log(app, format!("🔄 Max retries: {}/project", max_retries));
 
     // Pre-check export path
     if let Err(e) = validate_export_path(&config.export_path) {
@@ -77,7 +78,7 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
             break;
         }
 
-        let done_so_far = (idx) as u32;
+        let done_so_far = idx as u32;
         let elapsed = loop_start.elapsed().as_secs();
 
         // Emit progress: project bắt đầu
@@ -160,9 +161,9 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
             }
 
             // Step 6: Poll render done
-            let (done, elapsed) = steps::render::run(app, &config, &state, &before_files);
+            let (done, elapsed_render) = steps::render::run(app, &config, &state, &before_files);
             render_done = done;
-            render_elapsed = elapsed;
+            render_elapsed = elapsed_render;
 
             if state.should_stop.load(Ordering::SeqCst) {
                 restore_tool_window(app);

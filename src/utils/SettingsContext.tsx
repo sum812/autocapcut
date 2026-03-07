@@ -16,6 +16,7 @@ export interface AppConfig {
   render_delay: number;
   render_timeout: number;
   shutdown: boolean;
+  max_retries: number;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -27,6 +28,7 @@ const DEFAULT_CONFIG: AppConfig = {
   render_delay: 5,
   render_timeout: 30,
   shutdown: false,
+  max_retries: 2,
 };
 
 interface SettingsCtx {
