@@ -22,7 +22,11 @@ pub struct AppConfig {
 
     // Options
     pub shutdown: bool,          // Tắt máy sau khi render xong
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,        // Số lần retry mỗi project khi thất bại (default: 2)
 }
+
+fn default_max_retries() -> u32 { 2 }
 
 fn config_path(app: &AppHandle) -> std::path::PathBuf {
     let dir = app

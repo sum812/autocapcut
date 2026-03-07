@@ -1,7 +1,7 @@
 export interface Project {
   id: string;
   name: string;
-  status: "Pending" | "Running" | "Done" | "Error";
+  status: "Pending" | "Running" | "Retrying" | "Done" | "Error";
   selected: boolean;
 }
 
@@ -15,6 +15,7 @@ interface Props {
 const STATUS_BADGE: Record<Project["status"], string> = {
   Pending: "badge badge-pending",
   Running: "badge badge-running",
+  Retrying: "badge badge-running",
   Done: "badge badge-done",
   Error: "badge badge-error",
 };
