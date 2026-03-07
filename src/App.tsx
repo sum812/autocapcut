@@ -12,6 +12,8 @@ import FolderSelector from "./components/FolderSelector";
 import ProjectTable, { Project } from "./components/ProjectTable";
 import ControlPanel from "./components/ControlPanel";
 import Terminal from "./components/Terminal";
+import ProgressBar from "./components/ProgressBar";
+import { useProgress } from "./hooks/useProgress";
 
 function AppInner() {
   const { config, setConfig, saveConfig, loadConfig } = useSettings();
@@ -86,6 +88,8 @@ function AppInner() {
 
   const isRunning = autoStatus === "running" || autoStatus === "stopping";
 
+  const { progress, percent } = useProgress(isRunning);
+
   const { picking, startPick } = useCoordPicker(
     (key, coords) => handleConfigChange({ [key]: coords })
   );
@@ -97,6 +101,7 @@ function AppInner() {
   return (
     <div className="flex flex-col h-screen" style={{ background: "var(--bg-base)" }}>
       <Header autoStatus={autoStatus} />
+      <ProgressBar progress={progress} percent={percent} isRunning={isRunning} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel */}
