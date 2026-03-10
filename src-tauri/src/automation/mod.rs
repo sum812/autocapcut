@@ -59,9 +59,15 @@ pub struct AutoConfig {
     pub shutdown: bool,
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,            // số lần retry mỗi project (0 = không retry)
+    // F16 Notification
+    #[serde(default = "default_notify_on_done")]
+    pub notify_on_done: bool,
+    #[serde(default)]
+    pub notify_per_project: bool,
 }
 
 fn default_max_retries() -> u32 { 2 }
+fn default_notify_on_done() -> bool { true }
 
 // ─── Global keyboard listener (coordinate picking) ───────────────────────────
 

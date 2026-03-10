@@ -38,6 +38,8 @@ export function useAutomation(
           render_timeout_minutes: config.render_timeout,
           shutdown: config.shutdown,
           max_retries: config.max_retries,
+          notify_on_done: config.notify_on_done,
+          notify_per_project: config.notify_per_project,
         },
       });
     } catch (e) {

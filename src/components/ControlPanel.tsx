@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { AppConfig } from "../utils/SettingsContext";
 
 interface Props {
@@ -122,6 +123,13 @@ export default function ControlPanel({
                 onChange={(v) => onChange({ notify_sound: v })}
               />
             </Section>
+
+            <button
+              className="btn btn-ghost text-xs self-start"
+              onClick={() => invoke("send_test_notification")}
+            >
+              🔔 Test thông báo
+            </button>
 
             <Section title="Hệ thống">
               <CheckRow
