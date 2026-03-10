@@ -2,6 +2,7 @@ mod automation;
 mod config;
 mod detect;
 mod license;
+mod sync;
 mod updater;
 
 use automation::AutomationState;
@@ -49,6 +50,8 @@ pub fn run() {
             license::deactivate_license,
             license::refresh_license,
             license::get_machine_fingerprint,
+            // Sync (F17)
+            sync::process_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoCapcut");

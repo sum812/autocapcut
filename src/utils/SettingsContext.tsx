@@ -18,6 +18,14 @@ export interface AppConfig {
   shutdown: boolean;
   max_retries: number;
   wizard_completed: boolean;
+  // F17 Sync
+  sync_video_audio: boolean;
+  sync_image_duration: boolean;
+  sync_subtitles: boolean;
+  // F16 Notifications
+  notify_on_done: boolean;
+  notify_per_project: boolean;
+  notify_sound: boolean;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -31,6 +39,12 @@ const DEFAULT_CONFIG: AppConfig = {
   shutdown: false,
   max_retries: 2,
   wizard_completed: false,
+  sync_video_audio: false,
+  sync_image_duration: false,
+  sync_subtitles: false,
+  notify_on_done: true,
+  notify_per_project: false,
+  notify_sound: true,
 };
 
 interface SettingsCtx {

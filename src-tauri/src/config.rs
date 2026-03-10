@@ -28,9 +28,27 @@ pub struct AppConfig {
     // Onboarding
     #[serde(default)]
     pub wizard_completed: bool,  // true sau khi hoàn thành Setup Wizard lần đầu
+
+    // Sync options (F17)
+    #[serde(default)]
+    pub sync_video_audio: bool,       // Match video/image với audio 1:1
+    #[serde(default)]
+    pub sync_image_duration: bool,    // Kéo dài ảnh khớp tổng thời lượng audio
+    #[serde(default)]
+    pub sync_subtitles: bool,         // Đồng bộ video/ảnh với timing subtitle
+
+    // Notification options (F16)
+    #[serde(default = "default_notify_on_done")]
+    pub notify_on_done: bool,         // Windows toast khi tất cả xong
+    #[serde(default)]
+    pub notify_per_project: bool,     // Toast sau mỗi project
+    #[serde(default = "default_notify_sound")]
+    pub notify_sound: bool,           // Phát âm thanh khi xong
 }
 
 fn default_max_retries() -> u32 { 2 }
+fn default_notify_on_done() -> bool { true }
+fn default_notify_sound() -> bool { true }
 
 fn config_path(app: &AppHandle) -> std::path::PathBuf {
     let dir = app

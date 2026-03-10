@@ -18,6 +18,7 @@ import UpdateBanner from "./components/UpdateBanner";
 import { useProgress } from "./hooks/useProgress";
 import { useUpdater } from "./hooks/useUpdater";
 import { useLicense } from "./hooks/useLicense";
+import { useSync } from "./hooks/useSync";
 import LicenseDialog from "./components/LicenseDialog";
 
 function AppInner() {
@@ -90,8 +91,18 @@ function AppInner() {
   const selectedNames = projects.filter((p) => p.selected).map((p) => p.name);
 
   const { autoStatus, start, stop } = useAutomation(config, selectedNames);
+  const { isProcessing: isSyncProcessing, processProjects } = useSync();
 
   const isRunning = autoStatus === "running" || autoStatus === "stopping";
+
+  const handleStartProcessing = useCallback(async () => {
+    if (!config.project_folder || selectedNames.length === 0) return;
+    await processProjects(selectedNames, config.project_folder, {
+      sync_video_audio: config.sync_video_audio,
+      sync_image_duration: config.sync_image_duration,
+      sync_subtitles: config.sync_subtitles,
+    });
+  }, [config, selectedNames, processProjects]);
 
   const { progress, percent } = useProgress(isRunning);
   const { state: updateState, downloadAndInstall, dismiss: dismissUpdate } = useUpdater();
@@ -187,6 +198,9 @@ function AppInner() {
                 config={config}
                 onChange={handleConfigChange}
                 onSave={handleSave}
+                selectedProjects={selectedNames}
+                onStartProcessing={handleStartProcessing}
+                isProcessing={isSyncProcessing}
               />
             )}
           </div>
