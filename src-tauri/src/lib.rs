@@ -4,10 +4,13 @@ mod detect;
 mod license;
 pub mod notification;
 mod sync;
+mod tray;
 mod updater;
+mod validation;
 
 use automation::AutomationState;
 use license::LicenseState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,6 +20,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_tray::init())
         .manage(AutomationState::new())
         .manage(LicenseState::new())
         .setup(|app| {
@@ -24,7 +28,18 @@ pub fn run() {
             automation::init_listener(app.handle().clone());
             // Verify license từ cache (offline, không block UI)
             license::init_license(app.handle());
+            // Khởi tạo system tray
+            tray::setup_tray(app.handle())?;
             Ok(())
+        })
+        // Close window → ẩn xuống tray thay vì thoát
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             // Config
@@ -55,6 +70,10 @@ pub fn run() {
             sync::process_batch,
             // Notification (F16)
             notification::send_test_notification,
+            // Tray
+            tray::set_tray_status,
+            // Validation
+            validation::validate_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoCapcut");

@@ -2,14 +2,13 @@ import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AppConfig } from "../utils/SettingsContext";
+import { useValidation } from "./useValidation";
 
 export type AutoStatus = "idle" | "running" | "stopping" | "stopped";
 
-export function useAutomation(
-  config: AppConfig,
-  projectNames: string[],
-) {
+export function useAutomation(config: AppConfig, projectNames: string[]) {
   const [autoStatus, setAutoStatus] = useState<AutoStatus>("idle");
+  const { errors, validate, clearErrors } = useValidation();
 
   useEffect(() => {
     const unlistens: Array<() => void> = [];
@@ -19,11 +18,22 @@ export function useAutomation(
       setAutoStatus(s);
     }).then((u) => unlistens.push(u));
 
+    // Tray stop button
+    listen("tray-stop", () => {
+      invoke("stop_automation").catch(console.error);
+    }).then((u) => unlistens.push(u));
+
     return () => unlistens.forEach((u) => u());
   }, []);
 
   const start = useCallback(async () => {
     if (autoStatus === "running") return;
+
+    // Validate trước khi start
+    const ok = await validate(config, projectNames);
+    if (!ok) return;
+
+    clearErrors();
     setAutoStatus("running");
     try {
       await invoke("start_automation", {
@@ -46,7 +56,7 @@ export function useAutomation(
       console.error(e);
       setAutoStatus("idle");
     }
-  }, [autoStatus, config, projectNames]);
+  }, [autoStatus, config, projectNames, validate, clearErrors]);
 
   const stop = useCallback(async () => {
     if (autoStatus !== "running") return;
@@ -54,5 +64,5 @@ export function useAutomation(
     await invoke("stop_automation");
   }, [autoStatus]);
 
-  return { autoStatus, start, stop };
+  return { autoStatus, start, stop, validationErrors: errors, clearValidationErrors: clearErrors };
 }

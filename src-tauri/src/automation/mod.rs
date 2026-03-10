@@ -129,6 +129,10 @@ pub async fn start_automation(
         state.should_stop.store(false, Ordering::SeqCst);
     }
 
+    // Cập nhật tray: running
+    crate::tray::update_tray_status(&app, "running");
+    let _ = app.emit("automation-status", "Running");
+
     let app_handle = app.clone();
     thread::spawn(move || {
         runner::run_automation_loop(&app_handle, config);
@@ -136,13 +140,16 @@ pub async fn start_automation(
         let state = app_handle.state::<AutomationState>();
         *state.status.lock().unwrap() = AutomationStatus::Stopped;
         let _ = app_handle.emit("automation-status", "Stopped");
+        // Cập nhật tray: idle
+        crate::tray::update_tray_status(&app_handle, "idle");
     });
 
     Ok(())
 }
 
 #[tauri::command]
-pub fn stop_automation(state: tauri::State<AutomationState>) {
+pub fn stop_automation(app: AppHandle, state: tauri::State<AutomationState>) {
     state.should_stop.store(true, Ordering::SeqCst);
     *state.status.lock().unwrap() = AutomationStatus::Stopping;
+    crate::tray::update_tray_status(&app, "stopping");
 }
