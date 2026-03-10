@@ -20,6 +20,7 @@ import { useUpdater } from "./hooks/useUpdater";
 import { useLicense } from "./hooks/useLicense";
 import { useSync } from "./hooks/useSync";
 import LicenseDialog from "./components/LicenseDialog";
+import ValidationBanner from "./components/ValidationBanner";
 
 function AppInner() {
   const { config, setConfig, saveConfig, loadConfig } = useSettings();
@@ -90,7 +91,7 @@ function AppInner() {
 
   const selectedNames = projects.filter((p) => p.selected).map((p) => p.name);
 
-  const { autoStatus, start, stop } = useAutomation(config, selectedNames);
+  const { autoStatus, start, stop, validationErrors, clearValidationErrors } = useAutomation(config, selectedNames);
   const { isProcessing: isSyncProcessing, processProjects } = useSync();
 
   const isRunning = autoStatus === "running" || autoStatus === "stopping";
@@ -149,6 +150,7 @@ function AppInner() {
         onDismiss={dismissUpdate}
       />
       <ProgressBar progress={progress} percent={percent} isRunning={isRunning} />
+      <ValidationBanner errors={validationErrors} onDismiss={clearValidationErrors} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel */}

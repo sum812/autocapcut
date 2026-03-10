@@ -17,11 +17,19 @@
         "height": 760,
         "resizable": true,
         "minWidth": 1000,
-        "minHeight": 680
+        "minHeight": 680,
+        "closable": true
       }
     ],
     "security": {
       "csp": null
+    },
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/32x32.png",
+      "iconAsTemplate": false,
+      "menuOnLeftClick": false,
+      "tooltip": "AutoCapcut"
     }
   },
   "bundle": {
@@ -37,7 +45,10 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["Vietnamese", "English"]
+        "languages": [
+          "Vietnamese",
+          "English"
+        ]
       }
     }
   },
