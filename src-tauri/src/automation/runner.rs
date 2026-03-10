@@ -7,6 +7,7 @@ use super::helpers::{
     emit_progress, emit_project_status, get_files_in_dir, restore_tool_window,
     validate_export_path, ProgressPayload,
 };
+use crate::notification;
 use super::logger::{emit_log, init_log_file};
 use super::steps::{self, StepResult};
 use super::{AutoConfig, AutomationState};
@@ -192,6 +193,11 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
             failed_count += 1;
         }
 
+        // F16: notify per-project
+        if config.notify_per_project {
+            notification::notify_project_done(app, project_name, render_done);
+        }
+
         emit_log(app, format!("[summary] '{}': {} trong {}s (render={}s)", project_name, if render_done { "DONE" } else { "FAIL" }, project_elapsed, render_elapsed));
 
         // Emit progress: project hoàn thành
@@ -238,6 +244,16 @@ pub fn run_automation_loop(app: &AppHandle, config: AutoConfig) {
         app,
         format!("🎉 Hoàn thành! Đã render {}/{} project thành công.", success_count, total),
     );
+
+    // F16: notify batch done
+    if config.notify_on_done {
+        notification::notify_batch_done(
+            app,
+            total as usize,
+            success_count as usize,
+            failed_count as usize,
+        );
+    }
 
     if config.shutdown {
         emit_log(app, "🔌 Tắt máy sau 10 giây...");

@@ -2,6 +2,7 @@ mod automation;
 mod config;
 mod detect;
 mod license;
+pub mod notification;
 mod sync;
 mod updater;
 
@@ -52,6 +53,8 @@ pub fn run() {
             license::get_machine_fingerprint,
             // Sync (F17)
             sync::process_batch,
+            // Notification (F16)
+            notification::send_test_notification,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoCapcut");
