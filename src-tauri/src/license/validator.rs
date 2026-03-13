@@ -6,11 +6,15 @@ use serde::{Deserialize, Serialize};
 /// Public key của license server được embed vào binary.
 /// Thay PLACEHOLDER bằng public key RS256 thực khi generate keypair.
 /// Generate: openssl genrsa -out private.pem 2048 && openssl rsa -in private.pem -pubout -out public.pem
-const JWT_PUBLIC_KEY: &str = concat!(
-    "-----BEGIN PUBLIC KEY-----\n",
-    "PLACEHOLDER_REPLACE_WITH_REAL_RS256_PUBLIC_KEY\n",
-    "-----END PUBLIC KEY-----\n"
-);
+const JWT_PUBLIC_KEY: &str = "-----BEGIN PUBLIC KEY-----\n\
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApDvyCJ1aDP1dTPa9wEF2\n\
+K/SA/o3xxF+6lw+lgLyVsfyRitjvuwnDIw3M9EUCGjkc3tsh0ufSTKynKdfsp2N0\n\
+Opu0/K5kf3hzHnbAPWpl0QzisS2lELp3k3Zw2r4bwxlLB4rVPXYg7EEkGFkkGfDu\n\
+wJZTgRnUR1BP1rF+aKLxxGDL3/c0cZzTXmjGC+lQm+WiC7dpKesGfUpV/3rQx5Bn\n\
+PCSKKNLGZ05YkBO2bAinwu/2p+U0T1Twi+cWwpIwniTAHJ57nr2+L91jzfNMWWnt\n\
+82gwchXL48nLWRvPu8at/M3td2LH57bhd/58/1AGizf6pp/irXPV6e2Sh5RZolvU\n\
+TQIDAQAB\n\
+-----END PUBLIC KEY-----\n";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JwtClaims {
@@ -76,7 +80,7 @@ pub fn verify_jwt(token: &str) -> Result<JwtClaims, String> {
         .map_err(|e| format!("Lỗi load public key: {}", e))?;
 
     let mut validation = Validation::new(Algorithm::RS256);
-    validation.set_issuer(&["api.autocapcut.com"]);
+    validation.set_issuer(&["api.aicoachtools.com"]);
 
     decode::<JwtClaims>(token, &decoding_key, &validation)
         .map(|data| data.claims)
@@ -94,7 +98,7 @@ pub fn verify_jwt_allow_expired(token: &str) -> Result<JwtClaims, String> {
 
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = false;
-    validation.set_issuer(&["api.autocapcut.com"]);
+    validation.set_issuer(&["api.aicoachtools.com"]);
 
     decode::<JwtClaims>(token, &decoding_key, &validation)
         .map(|data| data.claims)

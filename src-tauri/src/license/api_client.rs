@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use crate::license::fingerprint::MachineFingerprint;
 
-const API_BASE: &str = "https://autocapcut-api.REPLACE_WITH_YOUR_WORKER.workers.dev";
+const API_BASE: &str = "https://api.aicoachtools.com";
 
 #[derive(Serialize)]
 struct ActivateRequest<'a> {
