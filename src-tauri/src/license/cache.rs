@@ -1,7 +1,4 @@
-/// cache.rs — Lưu/đọc JWT token trên disk, mã hóa bằng AES-256-GCM.
-///
-/// Encryption key = PBKDF2(machine_fingerprint_id + APP_SECRET).
-/// Copy license.dat sang máy khác sẽ không decrypt được (fingerprint khác → key khác).
+/// cache.rs — Lưu license info trên disk, mã hóa bằng AES-256-GCM.
 
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
@@ -14,15 +11,24 @@ use sha2::Sha256;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-/// Compile-time secret — thay bằng giá trị random thực khi build production.
-/// Set qua env var APP_SECRET trong CI/CD.
+/// Compile-time secret — set qua env var APP_SECRET trong CI/CD.
 const APP_SECRET: &str = env!("APP_SECRET", "Set APP_SECRET env var at build time");
+
+/// Dữ liệu license được lưu vào disk.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LicenseData {
+    pub license_key: String,
+    pub plan: String,
+    pub expires_at: Option<String>,
+    /// Unix timestamp của lần validate online gần nhất.
+    pub last_validated_at: i64,
+}
 
 #[derive(Serialize, Deserialize)]
 struct CacheFile {
     version: u8,
-    nonce: String,       // base64
-    ciphertext: String,  // base64
+    nonce: String,
+    ciphertext: String,
 }
 
 fn cache_path(app: &AppHandle) -> PathBuf {
@@ -34,31 +40,31 @@ fn cache_path(app: &AppHandle) -> PathBuf {
     dir.join("license.dat")
 }
 
-fn derive_key(fingerprint_id: &str) -> [u8; 32] {
-    let password = format!("{}:{}", fingerprint_id, APP_SECRET);
-    let salt = b"autocapcut-license-v1";
+fn derive_key(machine_id: &str) -> [u8; 32] {
+    let password = format!("{}:{}", machine_id, APP_SECRET);
+    let salt = b"autocapcut-license-v2";
     let mut key = [0u8; 32];
     pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, 10_000, &mut key);
     key
 }
 
-/// Lưu JWT token vào file mã hóa.
-pub fn save_token(app: &AppHandle, token: &str, fingerprint_id: &str) -> Result<(), String> {
-    let key_bytes = derive_key(fingerprint_id);
+pub fn save(app: &AppHandle, data: &LicenseData, machine_id: &str) -> Result<(), String> {
+    let key_bytes = derive_key(machine_id);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
 
+    let plaintext = serde_json::to_vec(data).map_err(|e| e.to_string())?;
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
     let ciphertext = cipher
-        .encrypt(&nonce, token.as_bytes())
+        .encrypt(&nonce, plaintext.as_slice())
         .map_err(|e| format!("Encrypt thất bại: {}", e))?;
 
-    let data = CacheFile {
-        version: 1,
+    let file = CacheFile {
+        version: 2,
         nonce: B64.encode(nonce.as_slice()),
         ciphertext: B64.encode(&ciphertext),
     };
 
-    let json = serde_json::to_string(&data).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string(&file).map_err(|e| e.to_string())?;
     let path = cache_path(app);
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, json).map_err(|e| format!("Ghi file thất bại: {}", e))?;
@@ -66,25 +72,26 @@ pub fn save_token(app: &AppHandle, token: &str, fingerprint_id: &str) -> Result<
     Ok(())
 }
 
-/// Đọc và giải mã JWT token từ cache.
-pub fn load_token(app: &AppHandle, fingerprint_id: &str) -> Option<String> {
+pub fn load(app: &AppHandle, machine_id: &str) -> Option<LicenseData> {
     let path = cache_path(app);
     let json = std::fs::read_to_string(&path).ok()?;
-    let data: CacheFile = serde_json::from_str(&json).ok()?;
+    let file: CacheFile = serde_json::from_str(&json).ok()?;
 
-    let key_bytes = derive_key(fingerprint_id);
+    if file.version != 2 {
+        return None;
+    }
+
+    let key_bytes = derive_key(machine_id);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
 
-    let nonce_bytes = B64.decode(&data.nonce).ok()?;
-    let ciphertext = B64.decode(&data.ciphertext).ok()?;
-
+    let nonce_bytes = B64.decode(&file.nonce).ok()?;
+    let ciphertext = B64.decode(&file.ciphertext).ok()?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).ok()?;
-    String::from_utf8(plaintext).ok()
+
+    serde_json::from_slice(&plaintext).ok()
 }
 
-/// Xóa cache (sau khi deactivate).
-pub fn clear_token(app: &AppHandle) {
-    let path = cache_path(app);
-    let _ = std::fs::remove_file(path);
+pub fn clear(app: &AppHandle) {
+    let _ = std::fs::remove_file(cache_path(app));
 }

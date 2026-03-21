@@ -1,10 +1,4 @@
-/// license/mod.rs — Public API cho License System.
-///
-/// Tauri commands:
-/// - `get_license_status`  — trả về LicenseStatus hiện tại (từ cache + JWT verify)
-/// - `activate_license`    — kích hoạt license key mới
-/// - `deactivate_license`  — hủy kích hoạt để giải phóng slot
-/// - `refresh_license`     — gọi online để refresh token
+/// license/mod.rs — License System dùng autocapcut-api server.
 
 pub mod api_client;
 pub mod cache;
@@ -16,174 +10,170 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use validator::LicenseStatus;
 
-const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Grace period: cho phép dùng offline tối đa 7 ngày sau lần validate cuối.
+const OFFLINE_GRACE_SECS: i64 = 7 * 24 * 3600;
 
-/// Shared state lưu LicenseStatus hiện tại (JSON string để dễ serialize qua IPC).
 pub struct LicenseState {
-    status_json: Mutex<Option<String>>,
-    token: Mutex<Option<String>>,
+    status: Mutex<LicenseStatus>,
 }
 
 impl LicenseState {
     pub fn new() -> Self {
-        Self {
-            status_json: Mutex::new(None),
-            token: Mutex::new(None),
-        }
+        Self { status: Mutex::new(LicenseStatus::NotActivated) }
     }
 
-    pub fn get_status(&self) -> Option<String> {
-        self.status_json.lock().ok()?.clone()
+    pub fn get(&self) -> LicenseStatus {
+        self.status.lock().map(|s| s.clone()).unwrap_or(LicenseStatus::NotActivated)
     }
 
-    fn set_status(&self, status: &LicenseStatus) {
-        if let Ok(mut lock) = self.status_json.lock() {
-            *lock = serde_json::to_string(status).ok();
-        }
-    }
-
-    fn get_token(&self) -> Option<String> {
-        self.token.lock().ok()?.clone()
-    }
-
-    fn set_token(&self, token: Option<String>) {
-        if let Ok(mut lock) = self.token.lock() {
-            *lock = token;
+    fn set(&self, s: LicenseStatus) {
+        if let Ok(mut lock) = self.status.lock() {
+            *lock = s;
         }
     }
 }
 
-/// Khởi động license check khi app mở.
-/// Đọc cache → verify JWT → set LicenseState.
-/// Gọi trong setup() của lib.rs.
-pub fn init_license(app: &AppHandle) {
-    let fingerprint = fingerprint::generate_fingerprint();
-    let token = cache::load_token(app, &fingerprint.id);
+fn now_ts() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
 
-    let state = app.state::<LicenseState>();
-
-    match token {
-        None => {
-            state.set_status(&LicenseStatus::NotActivated);
-        }
-        Some(ref t) => {
-            let status = validator::compute_status(t, &fingerprint.id);
-            state.set_status(&status);
-            state.set_token(Some(t.clone()));
-
-            // Background refresh nếu token sắp hết hạn (< 5 ngày)
-            if let LicenseStatus::Valid { days_until_token_expire, .. } = &status {
-                if *days_until_token_expire < 5 {
-                    let app_handle = app.clone();
-                    let token_clone = t.clone();
-                    let fp_clone = fingerprint.clone();
-                    std::thread::spawn(move || {
-                        tokio::runtime::Runtime::new().unwrap().block_on(async {
-                            background_refresh(&app_handle, &token_clone, &fp_clone).await;
-                        });
-                    });
-                }
+fn status_from_cache(data: &cache::LicenseData) -> LicenseStatus {
+    if let Some(ref exp_str) = data.expires_at {
+        if let Ok(exp_dt) = chrono::DateTime::parse_from_rfc3339(exp_str) {
+            if exp_dt.timestamp() < now_ts() {
+                return LicenseStatus::Expired { expired_at: exp_str.clone() };
             }
         }
     }
+    LicenseStatus::Valid { plan: data.plan.clone(), expires_at: data.expires_at.clone() }
 }
 
-async fn background_refresh(
-    app: &AppHandle,
-    token: &str,
-    fingerprint: &fingerprint::MachineFingerprint,
-) {
-    match api_client::validate(token, fingerprint, APP_VERSION).await {
+/// Khởi động license check khi app mở.
+pub fn init_license(app: &AppHandle) {
+    let machine_id = fingerprint::machine_id();
+    let state = app.state::<LicenseState>();
+
+    match cache::load(app, &machine_id) {
+        None => state.set(LicenseStatus::NotActivated),
+        Some(data) => {
+            state.set(status_from_cache(&data));
+
+            let app_handle = app.clone();
+            let data_clone = data.clone();
+            let mid = machine_id.clone();
+            std::thread::spawn(move || {
+                tokio::runtime::Runtime::new().unwrap().block_on(async {
+                    background_validate(&app_handle, &data_clone, &mid).await;
+                });
+            });
+        }
+    }
+}
+
+async fn background_validate(app: &AppHandle, data: &cache::LicenseData, machine_id: &str) {
+    let state = app.state::<LicenseState>();
+
+    match api_client::validate(&data.license_key, machine_id).await {
         Ok(resp) => {
-            let state = app.state::<LicenseState>();
-            let _ = cache::save_token(app, &resp.token, &fingerprint.id);
-            let new_status = validator::compute_status(&resp.token, &fingerprint.id);
-            state.set_status(&new_status);
-            state.set_token(Some(resp.token));
+            if resp.valid {
+                let plan = resp.plan.unwrap_or_else(|| data.plan.clone());
+                let expires_at = resp.expires_at.clone();
+                let updated = cache::LicenseData {
+                    license_key: data.license_key.clone(),
+                    plan: plan.clone(),
+                    expires_at: expires_at.clone(),
+                    last_validated_at: now_ts(),
+                };
+                let _ = cache::save(app, &updated, machine_id);
+                state.set(LicenseStatus::Valid { plan, expires_at });
+            } else {
+                let reason = resp.error.unwrap_or_else(|| "License không còn hợp lệ".into());
+                cache::clear(app);
+                state.set(LicenseStatus::Invalid { reason });
+            }
         }
         Err(_) => {
-            // Lỗi network khi refresh ngầm → không làm gì, giữ nguyên status
+            let elapsed = now_ts() - data.last_validated_at;
+            if elapsed > OFFLINE_GRACE_SECS {
+                state.set(LicenseStatus::Invalid {
+                    reason: "Không thể xác minh license (offline quá 7 ngày).".into(),
+                });
+            }
         }
     }
 }
 
 // ─── Tauri Commands ──────────────────────────────────────────────────────────
 
-/// Trả về LicenseStatus hiện tại dưới dạng JSON.
 #[tauri::command]
 pub async fn get_license_status(app: AppHandle) -> Result<serde_json::Value, String> {
     let state = app.state::<LicenseState>();
-    let json_str = state.get_status().unwrap_or_else(|| {
-        serde_json::to_string(&LicenseStatus::NotActivated).unwrap()
-    });
-    serde_json::from_str(&json_str).map_err(|e| e.to_string())
+    serde_json::to_value(&state.get()).map_err(|e| e.to_string())
 }
 
-/// Kích hoạt license key.
 #[tauri::command]
 pub async fn activate_license(app: AppHandle, key: String) -> Result<serde_json::Value, String> {
-    let fingerprint = fingerprint::generate_fingerprint();
+    let machine_id = fingerprint::machine_id();
+    let resp = api_client::activate(&key, &machine_id).await?;
 
-    let resp = api_client::activate(&key, &fingerprint, APP_VERSION).await?;
+    let plan = resp.plan.unwrap_or_else(|| "Pro".into());
+    let expires_at = resp.expires_at;
 
-    // Lưu token
-    cache::save_token(&app, &resp.token, &fingerprint.id)?;
+    let data = cache::LicenseData {
+        license_key: key,
+        plan: plan.clone(),
+        expires_at: expires_at.clone(),
+        last_validated_at: now_ts(),
+    };
+    cache::save(&app, &data, &machine_id)?;
+    app.state::<LicenseState>().set(LicenseStatus::Valid { plan, expires_at });
 
-    // Cập nhật state
-    let state = app.state::<LicenseState>();
-    let status = validator::compute_status(&resp.token, &fingerprint.id);
-    state.set_status(&status);
-    state.set_token(Some(resp.token));
-
-    // Trả về status mới
     get_license_status(app).await
 }
 
-/// Hủy kích hoạt (deactivate).
 #[tauri::command]
 pub async fn deactivate_license(app: AppHandle) -> Result<(), String> {
-    let fingerprint = fingerprint::generate_fingerprint();
-    let state = app.state::<LicenseState>();
-
-    let token = state
-        .get_token()
-        .ok_or_else(|| "Chưa có token để deactivate".to_string())?;
-
-    api_client::deactivate(&token, &fingerprint.id).await?;
-
-    cache::clear_token(&app);
-    state.set_status(&LicenseStatus::NotActivated);
-    state.set_token(None);
-
+    let machine_id = fingerprint::machine_id();
+    if let Some(data) = cache::load(&app, &machine_id) {
+        api_client::deactivate(&data.license_key, &machine_id).await?;
+    }
+    cache::clear(&app);
+    app.state::<LicenseState>().set(LicenseStatus::NotActivated);
     Ok(())
 }
 
-/// Refresh token online thủ công (user gọi nếu muốn).
 #[tauri::command]
 pub async fn refresh_license(app: AppHandle) -> Result<serde_json::Value, String> {
-    let fingerprint = fingerprint::generate_fingerprint();
-    let state = app.state::<LicenseState>();
+    let machine_id = fingerprint::machine_id();
+    let data = cache::load(&app, &machine_id).ok_or("Chưa kích hoạt license")?;
 
-    let token = state
-        .get_token()
-        .ok_or_else(|| "Chưa kích hoạt license".to_string())?;
+    let resp = api_client::validate(&data.license_key, &machine_id).await?;
 
-    let resp = api_client::validate(&token, &fingerprint, APP_VERSION).await?;
-
-    cache::save_token(&app, &resp.token, &fingerprint.id)?;
-    let status = validator::compute_status(&resp.token, &fingerprint.id);
-    state.set_status(&status);
-    state.set_token(Some(resp.token));
+    if resp.valid {
+        let plan = resp.plan.unwrap_or_else(|| data.plan.clone());
+        let expires_at = resp.expires_at;
+        let updated = cache::LicenseData {
+            license_key: data.license_key,
+            plan: plan.clone(),
+            expires_at: expires_at.clone(),
+            last_validated_at: now_ts(),
+        };
+        cache::save(&app, &updated, &machine_id)?;
+        app.state::<LicenseState>().set(LicenseStatus::Valid { plan, expires_at });
+    } else {
+        let reason = resp.error.unwrap_or_else(|| "License không hợp lệ".into());
+        cache::clear(&app);
+        app.state::<LicenseState>().set(LicenseStatus::Invalid { reason });
+    }
 
     get_license_status(app).await
 }
 
-/// Trả về machine fingerprint (để hiển thị cho user nếu cần support).
 #[tauri::command]
-pub fn get_machine_fingerprint() -> serde_json::Value {
-    let fp = fingerprint::generate_fingerprint();
-    serde_json::json!({
-        "id": &fp.id[..8],  // Chỉ show 8 ký tự đầu để privacy
-        "component_count": fp.component_count,
-    })
+pub fn get_machine_fingerprint() -> String {
+    let id = fingerprint::machine_id();
+    id[..id.len().min(8)].to_string()
 }

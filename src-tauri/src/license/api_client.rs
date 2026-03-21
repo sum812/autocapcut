@@ -1,153 +1,89 @@
-/// api_client.rs — HTTP calls đến license server.
+/// api_client.rs — Gọi autocapcut-api server.
 
 use serde::{Deserialize, Serialize};
-use crate::license::fingerprint::MachineFingerprint;
 
-const API_BASE: &str = "https://api.aicoachtools.com";
+const API_BASE: &str = "https://api.aicoachtools.com/api/v1/license";
 
 #[derive(Serialize)]
-struct ActivateRequest<'a> {
+struct ActivateBody<'a> {
     key: &'a str,
-    fingerprint_id: &'a str,
-    fingerprint_components: &'a [crate::license::fingerprint::FingerprintComponent],
-    app_version: &'a str,
-    platform: &'a str,
+    machine_id: &'a str,
 }
 
 #[derive(Serialize)]
-struct ValidateRequest<'a> {
-    fingerprint_id: &'a str,
-    fingerprint_components: &'a [crate::license::fingerprint::FingerprintComponent],
-    app_version: &'a str,
+struct ValidateBody<'a> {
+    key: &'a str,
+    machine_id: &'a str,
 }
 
 #[derive(Serialize)]
-struct DeactivateRequest<'a> {
-    fingerprint_id: &'a str,
+struct DeactivateBody<'a> {
+    key: &'a str,
+    machine_id: &'a str,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct LicenseResponse {
-    pub token: String,
-    pub plan: String,
-    pub license_expires_at: Option<String>,
-    pub max_projects: Option<u32>,
-    pub features: Vec<String>,
+    pub valid: bool,
+    pub plan: Option<String>,
+    pub expires_at: Option<String>,
+    pub error: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct ApiError {
-    error: String,
-    message: String,
-}
-
-/// Gửi yêu cầu activate license key.
-pub async fn activate(
-    key: &str,
-    fingerprint: &MachineFingerprint,
-    app_version: &str,
-) -> Result<LicenseResponse, String> {
-    let body = serde_json::to_string(&ActivateRequest {
-        key,
-        fingerprint_id: &fingerprint.id,
-        fingerprint_components: &fingerprint.components,
-        app_version,
-        platform: "windows-x64",
-    })
-    .map_err(|e| e.to_string())?;
-
-    let client = reqwest::Client::builder()
+fn build_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
-        .map_err(|e| e.to_string())?;
-
-    let resp = client
-        .post(format!("{}/api/v1/license/activate", API_BASE))
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| format!("Lỗi kết nối server: {}", e))?;
-
-    let status = resp.status();
-    let text = resp.text().await.unwrap_or_default();
-
-    if status.is_success() {
-        serde_json::from_str(&text).map_err(|e| format!("Lỗi parse response: {}", e))
-    } else {
-        let err: ApiError = serde_json::from_str(&text)
-            .unwrap_or(ApiError { error: "UNKNOWN".into(), message: text });
-        Err(err.message)
-    }
+        .map_err(|e| e.to_string())
 }
 
-/// Refresh JWT token (gọi ngầm khi token sắp hết hạn).
-pub async fn validate(
-    current_token: &str,
-    fingerprint: &MachineFingerprint,
-    app_version: &str,
-) -> Result<LicenseResponse, String> {
-    let body = serde_json::to_string(&ValidateRequest {
-        fingerprint_id: &fingerprint.id,
-        fingerprint_components: &fingerprint.components,
-        app_version,
-    })
-    .map_err(|e| e.to_string())?;
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-
+/// Kích hoạt license key.
+pub async fn activate(license_key: &str, machine_id: &str) -> Result<LicenseResponse, String> {
+    let client = build_client()?;
     let resp = client
-        .post(format!("{}/api/v1/license/validate", API_BASE))
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", current_token))
-        .body(body)
+        .post(format!("{}/activate", API_BASE))
+        .json(&ActivateBody { key: license_key, machine_id })
         .send()
         .await
-        .map_err(|e| format!("Lỗi kết nối server: {}", e))?;
+        .map_err(|e| format!("Lỗi kết nối: {}", e))?;
 
-    let status = resp.status();
-    let text = resp.text().await.unwrap_or_default();
+    let data: LicenseResponse = resp.json().await
+        .map_err(|e| format!("Lỗi parse response: {}", e))?;
 
-    if status.is_success() {
-        serde_json::from_str(&text).map_err(|e| format!("Lỗi parse response: {}", e))
-    } else {
-        let err: ApiError = serde_json::from_str(&text)
-            .unwrap_or(ApiError { error: "UNKNOWN".into(), message: text });
-        Err(err.message)
+    if !data.valid {
+        return Err(data.error.unwrap_or_else(|| "Kích hoạt thất bại".into()));
     }
+    Ok(data)
 }
 
-/// Hủy kích hoạt (deactivate) để giải phóng slot.
-pub async fn deactivate(
-    current_token: &str,
-    fingerprint_id: &str,
-) -> Result<(), String> {
-    let body = serde_json::to_string(&DeactivateRequest { fingerprint_id })
-        .map_err(|e| e.to_string())?;
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-
+/// Kiểm tra license còn hợp lệ không (gọi khi khởi động app).
+pub async fn validate(license_key: &str, machine_id: &str) -> Result<LicenseResponse, String> {
+    let client = build_client()?;
     let resp = client
-        .post(format!("{}/api/v1/license/deactivate", API_BASE))
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", current_token))
-        .body(body)
+        .post(format!("{}/validate", API_BASE))
+        .json(&ValidateBody { key: license_key, machine_id })
         .send()
         .await
-        .map_err(|e| format!("Lỗi kết nối server: {}", e))?;
+        .map_err(|e| format!("Lỗi kết nối: {}", e))?;
+
+    resp.json().await
+        .map_err(|e| format!("Lỗi parse response: {}", e))
+}
+
+/// Hủy kích hoạt để giải phóng slot.
+pub async fn deactivate(license_key: &str, machine_id: &str) -> Result<(), String> {
+    let client = build_client()?;
+    let resp = client
+        .post(format!("{}/deactivate", API_BASE))
+        .json(&DeactivateBody { key: license_key, machine_id })
+        .send()
+        .await
+        .map_err(|e| format!("Lỗi kết nối: {}", e))?;
 
     if resp.status().is_success() {
         Ok(())
     } else {
-        let text = resp.text().await.unwrap_or_default();
-        let err: ApiError = serde_json::from_str(&text)
-            .unwrap_or(ApiError { error: "UNKNOWN".into(), message: text });
-        Err(err.message)
+        let data: serde_json::Value = resp.json().await.unwrap_or_default();
+        Err(data["error"].as_str().unwrap_or("Deactivate thất bại").to_string())
     }
 }

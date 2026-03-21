@@ -122,6 +122,11 @@ mod platform {
     }
 }
 
+/// Trả về machine ID (SHA256 hash của hardware components).
+pub fn machine_id() -> String {
+    generate_fingerprint().id
+}
+
 /// Tạo machine fingerprint.
 pub fn generate_fingerprint() -> MachineFingerprint {
     #[cfg(target_os = "windows")]

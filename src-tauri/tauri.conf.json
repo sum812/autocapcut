@@ -54,7 +54,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "PLACEHOLDER_REPLACE_WITH_OUTPUT_OF_tauri_signer_generate",
+      "pubkey": "RWQqFWCPL7eHwCTlp+2nMLlRa2a2z7nLRlv5F76fAsbALl8dmvQrCX8/",
       "endpoints": [
         "https://github.com/sum812/autocapcut/releases/latest/download/latest.json"
       ],
