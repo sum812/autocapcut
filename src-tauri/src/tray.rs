@@ -20,6 +20,9 @@ use tauri::{
 
 pub const TRAY_ID: &str = "main";
 
+/// App state lưu handle đến "Stop" menu item để enable/disable sau này.
+pub struct TrayStopItem(pub MenuItem<tauri::Wry>);
+
 /// Khởi tạo tray icon + menu khi app start.
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let show_item = MenuItem::with_id(app, "show", "Hiện cửa sổ", true, None::<&str>)?;
@@ -29,6 +32,9 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let quit_item = MenuItem::with_id(app, "quit", "Thoát AutoCapcut", true, None::<&str>)?;
 
     let menu = Menu::with_items(app, &[&show_item, &sep, &stop_item, &sep2, &quit_item])?;
+
+    // Lưu stop_item vào app state để update_tray_status dùng
+    app.manage(TrayStopItem(stop_item));
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(app.default_window_icon().unwrap().clone())
@@ -70,14 +76,12 @@ pub fn update_tray_status(app: &AppHandle, status: &str) {
             _ => "AutoCapcut — Idle",
         };
         let _ = tray.set_tooltip(Some(tooltip));
+    }
 
-        // Enable "Stop" chỉ khi đang running
-        if let Some(menu) = tray.menu() {
-            if let Ok(stop_item) = menu.get("stop") {
-                let enabled = status == "running";
-                let _ = stop_item.as_menuitem().map(|i| i.set_enabled(enabled));
-            }
-        }
+    // Enable "Stop" chỉ khi đang running
+    if let Some(state) = app.try_state::<TrayStopItem>() {
+        let enabled = status == "running";
+        let _ = state.0.set_enabled(enabled);
     }
 }
 
