@@ -27,6 +27,25 @@ pub fn run(
     focus_capcut_log(app);
     thread::sleep(Duration::from_millis(4000));
 
+    // Tính số lần cần nhấn Right arrow để đến đúng project trong search results.
+    // CapCut sort results theo recency (newest first) — giống scanner.rs.
+    // Nếu "0325 (1)" mới hơn "0325", nó xuất hiện trước trong results khi search "0325".
+    let search_offset: usize = if config.search_button_coords.0 > 0
+        && !config.all_project_names.is_empty()
+    {
+        let lower_target = project_name.to_lowercase();
+        // Số project trong all_project_names có tên CHỨA project_name VÀ đứng TRƯỚC nó
+        let offset = config
+            .all_project_names
+            .iter()
+            .take_while(|n| n.as_str() != project_name)
+            .filter(|n| n.to_lowercase().contains(&lower_target))
+            .count();
+        offset
+    } else {
+        0
+    };
+
     // Search project theo tên (nếu đã calibrate search button)
     if config.search_button_coords.0 > 0 && config.search_button_coords.1 > 0 {
         emit_log(app, format!("[step1] Search: \"{}\"", project_name));
@@ -45,18 +64,21 @@ pub fn run(
         thread::sleep(Duration::from_millis(200));
         let _ = enigo.text(project_name);
         thread::sleep(Duration::from_millis(3000));
-        emit_log(app, "  [step1] ✓ Search done — chờ filter");
+        emit_log(app, format!("  [step1] ✓ Search done — offset={}", search_offset));
     }
 
     // Snapshot wins TRƯỚC double-click
     let wins_before = get_capcut_window_count();
     log_diagnostic(app, "Trước double-click");
 
+    // Mở project:
+    // - offset=0: double-click trực tiếp tại first_project_coords
+    // - offset>0: single-click để focus grid → Right arrow N lần → Enter
     emit_log(
         app,
         format!(
-            "[step1] Mở project \"{}\" — double-click tại ({}, {})",
-            project_name, config.first_project_coords.0, config.first_project_coords.1
+            "[step1] Mở project \"{}\" (offset={}) tại ({}, {})",
+            project_name, search_offset, config.first_project_coords.0, config.first_project_coords.1
         ),
     );
 
@@ -75,7 +97,32 @@ pub fn run(
         let _ = enigo.button(Button::Left, Direction::Release);
     };
 
-    do_double_click(enigo);
+    let do_nav_open = |enigo: &mut Enigo| {
+        // Single click → focus/select project tại vị trí 0 trong grid
+        let _ = enigo.move_mouse(
+            config.first_project_coords.0,
+            config.first_project_coords.1,
+            Coordinate::Abs,
+        );
+        thread::sleep(Duration::from_millis(300));
+        let _ = enigo.button(Button::Left, Direction::Click);
+        thread::sleep(Duration::from_millis(500));
+        // Dùng Right arrow để navigate đến vị trí đúng
+        for i in 0..search_offset {
+            let _ = enigo.key(Key::RightArrow, Direction::Click);
+            thread::sleep(Duration::from_millis(200));
+            emit_log(app, format!("    [step1] → arrow {}/{}", i + 1, search_offset));
+        }
+        thread::sleep(Duration::from_millis(300));
+        // Enter để mở project đã chọn
+        let _ = enigo.key(Key::Return, Direction::Click);
+    };
+
+    if search_offset == 0 {
+        do_double_click(enigo);
+    } else {
+        do_nav_open(enigo);
+    }
     emit_log(app, "  [step1] Double-click sent — chờ project mở...");
 
     // Poll verify project mở (wins tăng = new Electron BrowserWindow)
@@ -108,10 +155,14 @@ pub fn run(
 
     // Retry 1 lần nếu chưa mở
     if !project_opened {
-        emit_log(app, "  [step1] ⚠ Project chưa mở — retry double-click...");
+        emit_log(app, "  [step1] ⚠ Project chưa mở — retry...");
         focus_capcut_log(app);
         thread::sleep(Duration::from_millis(1000));
-        do_double_click(enigo);
+        if search_offset == 0 {
+            do_double_click(enigo);
+        } else {
+            do_nav_open(enigo);
+        }
         let retry_start = Instant::now();
         loop {
             let wins_now = get_capcut_window_count();

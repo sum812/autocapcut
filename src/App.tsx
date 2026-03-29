@@ -90,8 +90,9 @@ function AppInner() {
   }, []);
 
   const selectedNames = projects.filter((p) => p.selected).map((p) => p.name);
+  const allProjectNames = projects.map((p) => p.name);
 
-  const { autoStatus, start, stop, validationErrors, clearValidationErrors } = useAutomation(config, selectedNames);
+  const { autoStatus, start, stop, validationErrors, clearValidationErrors } = useAutomation(config, selectedNames, allProjectNames);
   const { isProcessing: isSyncProcessing, processProjects } = useSync();
 
   const isRunning = autoStatus === "running" || autoStatus === "stopping";

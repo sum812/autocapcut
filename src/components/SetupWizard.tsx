@@ -145,23 +145,27 @@ export default function SetupWizard({ config, onChange, onComplete }: Props) {
     >
       <div
         className="rounded-xl shadow-2xl w-[560px] max-h-[85vh] overflow-y-auto"
-        style={{ background: "var(--bg-base)", border: "1px solid var(--border)" }}
+        style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
       >
         {/* Header */}
-        <div className="px-8 pt-7 pb-5 border-b" style={{ borderColor: "var(--border)" }}>
+        <div style={{
+          padding: "24px 32px 20px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg-base)",
+        }}>
           <div className="text-lg font-bold" style={{ color: "var(--text-pri)" }}>
             Thiết lập AutoCapcut
           </div>
-          <div className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
+          <div className="text-xs" style={{ color: "var(--text-dim)", marginTop: 4 }}>
             Bước {step}/{TOTAL_STEPS} — chỉ cần làm 1 lần
           </div>
-          <div className="mt-5">
+          <div style={{ marginTop: 20 }}>
             <StepIndicator step={step} />
           </div>
         </div>
 
         {/* Step content */}
-        <div className="px-8 py-6">
+        <div style={{ padding: "28px 32px" }}>
 
         {/* ─── Step 1: Chọn thư mục ─────────────────────────── */}
         {step === 1 && (
@@ -388,10 +392,14 @@ export default function SetupWizard({ config, onChange, onComplete }: Props) {
         </div>{/* end step content */}
 
         {/* ─── Footer navigation ────────────────────────────── */}
-        <div
-          className="flex justify-between items-center px-8 py-4"
-          style={{ borderTop: "1px solid var(--border)", background: "var(--bg-surface)" }}
-        >
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "16px 32px",
+          borderTop: "1px solid var(--border)",
+          background: "var(--bg-base)",
+        }}>
           <button
             className="btn btn-ghost text-xs"
             onClick={() => step > 1 ? setStep(step - 1) : undefined}

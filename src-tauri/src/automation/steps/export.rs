@@ -74,7 +74,8 @@ pub fn run(
     // Step 4: Set export path — CHỈ project đầu tiên (idx == 0).
     // CapCut nhớ export path từ lần đầu, project 2+ không cần set lại.
     if idx == 0 && config.export_input_coords.0 > 0 && config.export_input_coords.1 > 0 {
-        thread::sleep(Duration::from_millis(2000));
+        // Chờ export dialog load đủ trước khi click path button
+        thread::sleep(Duration::from_millis(3000));
         log_diagnostic(app, "Trước click export path");
 
         emit_log(
@@ -89,19 +90,20 @@ pub fn run(
             config.export_input_coords.1,
             Coordinate::Abs,
         );
-        thread::sleep(Duration::from_millis(2000));
+        thread::sleep(Duration::from_millis(1000));
         let _ = enigo.button(Button::Left, Direction::Click);
+        thread::sleep(Duration::from_millis(2000));
 
-        // Poll cho đến khi folder picker xuất hiện (hỗ trợ EN + VI)
-        let picker_titles: &[&str] =
-            &["Select exporting path", "Chọn đường dẫn khi xuất"];
-        emit_log(app, format!("[step4] Chờ folder picker {:?}...", picker_titles));
+        // Dùng substring search thay vì FindWindowW exact — robust hơn khi title thay đổi theo ngôn ngữ
+        // EN: "Select exporting path"  VI: "Chọn đường dẫn khi xuất"
+        let picker_substr: &[&str] = &["exporting path", "đường dẫn khi xuất"];
+        emit_log(app, format!("[step4] Chờ folder picker (substr: {:?})...", picker_substr));
 
         let picker_found;
         #[cfg(target_os = "windows")]
         {
             use super::super::window::win_focus;
-            picker_found = win_focus::wait_for_window_any_title(picker_titles, 6000).is_some();
+            picker_found = win_focus::wait_for_window_with_substr(picker_substr, 6000).is_some();
         }
         #[cfg(not(target_os = "windows"))]
         {
@@ -109,7 +111,28 @@ pub fn run(
         }
 
         if !picker_found {
-            emit_log(app, "[step4] ⚠ Folder picker không xuất hiện — bỏ qua thay đổi path");
+            // Fallback: có thể CapCut dùng inline text input thay vì folder picker dialog.
+            // Thử Ctrl+A → paste path → Enter để đổi path trực tiếp trong input.
+            emit_log(app, "[step4] ⚠ Folder picker không xuất hiện — thử inline edit path...");
+            #[cfg(target_os = "windows")]
+            {
+                use super::super::window::win_focus;
+                let _ = enigo.key(Key::Control, Direction::Press);
+                let _ = enigo.key(Key::Unicode('a'), Direction::Click);
+                let _ = enigo.key(Key::Control, Direction::Release);
+                thread::sleep(Duration::from_millis(300));
+                if win_focus::set_clipboard_text(&config.export_path) {
+                    let _ = enigo.key(Key::Control, Direction::Press);
+                    let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+                    let _ = enigo.key(Key::Control, Direction::Release);
+                    emit_log(app, "  [step4] Paste path inline qua clipboard");
+                } else {
+                    let _ = enigo.text(&config.export_path);
+                }
+                thread::sleep(Duration::from_millis(500));
+                let _ = enigo.key(Key::Return, Direction::Click);
+                emit_log(app, "  [step4] Inline path entered");
+            }
         } else {
             emit_log(app, "[step4] ✓ Folder picker mở — dùng Alt+D focus address bar...");
             thread::sleep(Duration::from_millis(2000));
@@ -152,9 +175,7 @@ pub fn run(
             #[cfg(target_os = "windows")]
             {
                 use super::super::window::win_focus;
-                if let Some((l, t, r, _b)) =
-                    win_focus::get_window_rect_by_any_title(picker_titles)
-                {
+                if let Some((l, t, r, _b)) = win_focus::get_window_rect_with_substr(picker_substr) {
                     let title_x = l + (r - l) / 2;
                     let title_y = t + 15;
                     emit_log(
@@ -176,26 +197,23 @@ pub fn run(
             #[cfg(target_os = "windows")]
             {
                 use super::super::window::win_focus;
-                let closed = win_focus::wait_for_window_any_close(picker_titles, 4000);
+                let closed = win_focus::wait_for_window_with_substr_close(picker_substr, 4000);
                 if closed {
                     emit_log(app, "[step4] ✓ Picker đã đóng");
                 } else {
                     emit_log(app, "[step4] ⚠ Picker vẫn mở — retry title bar + Enter...");
-                    if let Some((l, t, r, _b)) =
-                        win_focus::get_window_rect_by_any_title(picker_titles)
-                    {
-                        let _ = enigo
-                            .move_mouse(l + (r - l) / 2, t + 15, Coordinate::Abs);
+                    if let Some((l, t, r, _b)) = win_focus::get_window_rect_with_substr(picker_substr) {
+                        let _ = enigo.move_mouse(l + (r - l) / 2, t + 15, Coordinate::Abs);
                         thread::sleep(Duration::from_millis(300));
                         let _ = enigo.button(Button::Left, Direction::Click);
                         thread::sleep(Duration::from_millis(500));
                         let _ = enigo.key(Key::Return, Direction::Click);
                     }
-                    let closed2 = win_focus::wait_for_window_any_close(picker_titles, 4000);
+                    let closed2 = win_focus::wait_for_window_with_substr_close(picker_substr, 4000);
                     if !closed2 {
                         emit_log(app, "[step4] ⚠ Picker không đóng — Escape để hủy");
                         let _ = enigo.key(Key::Escape, Direction::Click);
-                        let _ = win_focus::wait_for_window_any_close(picker_titles, 3000);
+                        let _ = win_focus::wait_for_window_with_substr_close(picker_substr, 3000);
                     }
                 }
             }

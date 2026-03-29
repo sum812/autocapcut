@@ -6,7 +6,7 @@ import { useValidation } from "./useValidation";
 
 export type AutoStatus = "idle" | "running" | "stopping" | "stopped";
 
-export function useAutomation(config: AppConfig, projectNames: string[]) {
+export function useAutomation(config: AppConfig, projectNames: string[], allProjectNames: string[] = []) {
   const [autoStatus, setAutoStatus] = useState<AutoStatus>("idle");
   const { errors, validate, clearErrors } = useValidation();
 
@@ -50,6 +50,7 @@ export function useAutomation(config: AppConfig, projectNames: string[]) {
           max_retries: config.max_retries,
           notify_on_done: config.notify_on_done,
           notify_per_project: config.notify_per_project,
+          all_project_names: allProjectNames,
         },
       });
     } catch (e) {

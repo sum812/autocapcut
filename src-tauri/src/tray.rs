@@ -39,6 +39,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
+        .show_menu_on_left_click(false)
         .tooltip("AutoCapcut — Idle")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_window(app),

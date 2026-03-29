@@ -507,6 +507,93 @@ pub mod win_focus {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
+
+    // ─── Substring-based window finders (robust hơn FindWindowW exact match) ───
+
+    struct SubstrSearchData {
+        hwnd: *mut std::ffi::c_void,
+        found_title: String,
+        needles: Vec<String>,
+    }
+
+    extern "system" fn enum_substr_callback(hwnd: *mut std::ffi::c_void, lparam: isize) -> i32 {
+        unsafe {
+            if IsWindowVisible(hwnd) == 0 {
+                return 1;
+            }
+            let mut buf = [0u16; 256];
+            let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), 256);
+            if len > 0 {
+                let title = String::from_utf16_lossy(&buf[..len as usize]);
+                let title_lower = title.to_lowercase();
+                let data = &mut *(lparam as *mut SubstrSearchData);
+                if data.needles.iter().any(|n| title_lower.contains(n.as_str())) {
+                    data.hwnd = hwnd;
+                    data.found_title = title;
+                    return 0; // dừng enumeration
+                }
+            }
+        }
+        1
+    }
+
+    fn run_substr_enum(needles: &[&str]) -> SubstrSearchData {
+        let mut data = SubstrSearchData {
+            hwnd: ptr::null_mut(),
+            found_title: String::new(),
+            needles: needles.iter().map(|s| s.to_lowercase()).collect(),
+        };
+        unsafe { EnumWindows(enum_substr_callback, &mut data as *mut _ as isize); }
+        data
+    }
+
+    /// Tìm cửa sổ đầu tiên có title chứa ít nhất một needle (case-insensitive).
+    pub fn find_window_with_substr(needles: &[&str]) -> bool {
+        !run_substr_enum(needles).hwnd.is_null()
+    }
+
+    /// Poll cho đến khi xuất hiện cửa sổ có title chứa needle, trả về title nếu tìm thấy.
+    pub fn wait_for_window_with_substr(needles: &[&str], timeout_ms: u64) -> Option<String> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        loop {
+            let d = run_substr_enum(needles);
+            if !d.hwnd.is_null() {
+                return Some(d.found_title);
+            }
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+    /// Poll cho đến khi KHÔNG còn cửa sổ nào chứa needle.
+    pub fn wait_for_window_with_substr_close(needles: &[&str], timeout_ms: u64) -> bool {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        loop {
+            if run_substr_enum(needles).hwnd.is_null() {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+    /// Lấy rect của cửa sổ đầu tiên có title chứa needle.
+    pub fn get_window_rect_with_substr(needles: &[&str]) -> Option<(i32, i32, i32, i32)> {
+        let d = run_substr_enum(needles);
+        if d.hwnd.is_null() {
+            return None;
+        }
+        let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+        if unsafe { GetWindowRect(d.hwnd, &mut rect) } != 0 {
+            Some((rect.left, rect.top, rect.right, rect.bottom))
+        } else {
+            None
+        }
+    }
 }
 
 // ─── Window HWND / Rect helpers (dùng bởi detect module) ─────────────────────

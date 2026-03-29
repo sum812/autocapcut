@@ -64,6 +64,10 @@ pub struct AutoConfig {
     pub notify_on_done: bool,
     #[serde(default)]
     pub notify_per_project: bool,
+    /// Toàn bộ danh sách project (từ scan, sorted newest-first) — dùng để tính vị trí
+    /// trong search results khi có nhiều project tên gần giống nhau.
+    #[serde(default)]
+    pub all_project_names: Vec<String>,
 }
 
 fn default_max_retries() -> u32 { 2 }
