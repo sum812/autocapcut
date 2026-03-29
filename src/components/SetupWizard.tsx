@@ -38,7 +38,7 @@ const COORD_INFO: { key: CoordKey; label: string; tip: string; required: boolean
 
 function StepIndicator({ step }: { step: number }) {
   return (
-    <div className="flex items-center gap-2 mb-6">
+    <div className="flex items-center gap-2">
       {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
         <div key={n} className="flex items-center gap-2">
           <div
@@ -144,73 +144,72 @@ export default function SetupWizard({ config, onChange, onComplete }: Props) {
       style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
     >
       <div
-        className="rounded-xl shadow-2xl p-8 w-[540px] max-h-[80vh] overflow-y-auto"
+        className="rounded-xl shadow-2xl w-[560px] max-h-[85vh] overflow-y-auto"
         style={{ background: "var(--bg-base)", border: "1px solid var(--border)" }}
       >
         {/* Header */}
-        <div className="mb-2">
+        <div className="px-8 pt-7 pb-5 border-b" style={{ borderColor: "var(--border)" }}>
           <div className="text-lg font-bold" style={{ color: "var(--text-pri)" }}>
             Thiết lập AutoCapcut
           </div>
-          <div className="text-xs mt-0.5" style={{ color: "var(--text-dim)" }}>
+          <div className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
             Bước {step}/{TOTAL_STEPS} — chỉ cần làm 1 lần
+          </div>
+          <div className="mt-5">
+            <StepIndicator step={step} />
           </div>
         </div>
 
-        <StepIndicator step={step} />
+        {/* Step content */}
+        <div className="px-8 py-6">
 
         {/* ─── Step 1: Chọn thư mục ─────────────────────────── */}
         {step === 1 && (
-          <div className="flex flex-col gap-4">
-            <div>
-              <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-pri)" }}>
-                Chọn thư mục
-              </div>
-              <p className="text-xs mb-4" style={{ color: "var(--text-sec)" }}>
-                Chọn thư mục chứa project CapCut và thư mục xuất video ra.
-              </p>
+          <div className="flex flex-col gap-6">
+            <p className="text-xs" style={{ color: "var(--text-sec)" }}>
+              Chọn thư mục chứa project CapCut và thư mục xuất video ra.
+            </p>
 
-              {/* Project folder */}
-              <div className="flex flex-col gap-1 mb-3">
-                <label className="text-xs font-medium" style={{ color: "var(--text-sec)" }}>
-                  Thư mục dự án CapCut <span style={{ color: "var(--color-error, #f87171)" }}>*</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    className="input text-xs flex-1 font-mono"
-                    readOnly
-                    value={config.project_folder}
-                    placeholder="Chọn thư mục..."
-                  />
-                  <button className="btn btn-ghost text-xs py-1 px-3" onClick={() => pickFolder("project_folder")}>
-                    Chọn
-                  </button>
-                </div>
-                {config.project_folder && (
-                  <span className="text-xs" style={{ color: "var(--accent)" }}>✓ Đã chọn</span>
-                )}
+            {/* Project folder */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium" style={{ color: "var(--text-sec)" }}>
+                Thư mục dự án CapCut <span style={{ color: "var(--color-error, #f87171)" }}>*</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  className="input text-xs flex-1 font-mono"
+                  readOnly
+                  value={config.project_folder}
+                  placeholder="Chọn thư mục..."
+                />
+                <button className="btn btn-ghost text-xs py-1 px-3" onClick={() => pickFolder("project_folder")}>
+                  Chọn
+                </button>
               </div>
+              {config.project_folder && (
+                <span className="text-xs" style={{ color: "var(--accent)" }}>✓ Đã chọn</span>
+              )}
+            </div>
 
-              {/* Export folder */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium" style={{ color: "var(--text-sec)" }}>
-                  Thư mục xuất video <span style={{ color: "var(--color-error, #f87171)" }}>*</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    className="input text-xs flex-1 font-mono"
-                    readOnly
-                    value={config.export_folder}
-                    placeholder="Chọn thư mục..."
-                  />
-                  <button className="btn btn-ghost text-xs py-1 px-3" onClick={() => pickFolder("export_folder")}>
-                    Chọn
-                  </button>
-                </div>
-                {config.export_folder && (
-                  <span className="text-xs" style={{ color: "var(--accent)" }}>✓ Đã chọn</span>
-                )}
+            {/* Export folder */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium" style={{ color: "var(--text-sec)" }}>
+                Thư mục xuất video <span style={{ color: "var(--color-error, #f87171)" }}>*</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  className="input text-xs flex-1 font-mono"
+                  readOnly
+                  value={config.export_folder}
+                  placeholder="Chọn thư mục..."
+                />
+                <button className="btn btn-ghost text-xs py-1 px-3" onClick={() => pickFolder("export_folder")}>
+                  Chọn
+                </button>
               </div>
+              {config.export_folder && (
+                <span className="text-xs" style={{ color: "var(--accent)" }}>✓ Đã chọn</span>
+              )}
             </div>
           </div>
         )}
@@ -386,8 +385,13 @@ export default function SetupWizard({ config, onChange, onComplete }: Props) {
           </div>
         )}
 
+        </div>{/* end step content */}
+
         {/* ─── Footer navigation ────────────────────────────── */}
-        <div className="flex justify-between items-center mt-6 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+        <div
+          className="flex justify-between items-center px-8 py-4"
+          style={{ borderTop: "1px solid var(--border)", background: "var(--bg-surface)" }}
+        >
           <button
             className="btn btn-ghost text-xs"
             onClick={() => step > 1 ? setStep(step - 1) : undefined}
@@ -397,7 +401,6 @@ export default function SetupWizard({ config, onChange, onComplete }: Props) {
           </button>
 
           <div className="flex gap-2">
-            {/* Bỏ qua (chỉ step 2, 3) */}
             {(step === 2 || step === 3) && (
               <button
                 className="btn btn-ghost text-xs"
